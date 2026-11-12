@@ -1,0 +1,8 @@
+{
+  "serverUrl": "http://localhost:4096",
+  "boss": { "name": "boss", "project": "Agents-Lobby", "session": "ses_replace_with_boss_session_id" },
+  "agents": [
+    { "name": "taskflow", "project": "TaskFlow", "session": "ses_replace_with_session_id" },
+    { "name": "immigapp", "project": "ImmigApp", "session": "ses_replace_with_session_id" }
+  ]
+}

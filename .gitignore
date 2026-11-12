@@ -1,0 +1,9 @@
+# Runtime data
+incoming_messages.txt
+
+# Local registry (contains session IDs; use agents.example.json as template)
+agents.json
+
+# OS junk
+Thumbs.db
+desktop.ini
