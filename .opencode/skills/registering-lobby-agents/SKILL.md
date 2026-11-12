@@ -10,27 +10,38 @@ Create an OpenCode session in a project directory, get its session ID, then regi
 ## Steps (in order)
 
 1. **Dedup check:** `GET /api/session?directory=<project dir>` (with auth, below). If a session already exists there, confirm with the human whether to reuse it before creating a new one.
-2. **Create the session:**
+2. **Provision the coordinator agent in the project** (before or after session creation):
+   - Copy the template at `<this skill's directory>/../../../.placeholder/agent/coordinator.md`
+     to `<project dir>/.opencode/agents/coordinator.md` — **only if that file does not
+     exist. If one exists, leave it untouched and report that.**
+   - Ensure the project's `opencode.json` declares the coordinator as the default agent
+     (`"default_agent": "coordinator"`):
+     - no `opencode.json` in the project → create one:
+       `{ "$schema": "https://opencode.ai/config.json", "default_agent": "coordinator" }`
+     - exists without `default_agent` → add the field, preserving everything else
+     - exists with a **different** `default_agent` → stop and ask the human; do not change it
+3. **Ask the human for the registry name.** NEVER invent or propose-default-then-proceed: the name is the human's decision — ask, wait for the answer, use it verbatim. (It is needed before step 4: the session title embeds it.)
+4. **Create the session:**
 
    ```sh
    curl -X POST http://127.0.0.1:28894/api/session \
      -u "opencode:<password>" \
      -H "Content-Type: application/json" \
-     -d "{\"title\": \"<title>\", \"location\": {\"directory\": \"<project dir>\"}}"
+     -d "{\"title\": \"(<name>)<project name>\", \"location\": {\"directory\": \"<project dir>\"}}"
    ```
 
+   - **Title format is fixed: `(<name>)<project name>`** — e.g. `(taskflow2)TaskFlow` — using the name from step 3.
    - `location.directory` binds the session to the project — required.
-   - Optional `agent` field pins an agent at creation. List valid IDs with `GET /api/agent`; project-specific agents come from that project's config. Omit to use the default.
+   - Optional `agent` field pins an agent at creation (e.g. `"agent": "coordinator"` once provisioned). List valid IDs with `GET /api/agent`; project-specific agents come from that project's config. Omit to use the default.
    - The response's `data.id` (`ses_...`) is the session ID. It is returned immediately; no waiting.
-3. **Ask the human for the registry name.** NEVER invent or propose-default-then-proceed: the name is the human's decision — ask, wait for the answer, use it verbatim.
-4. **Register:** append to `F:\DEVELOPMENT\AI\PROJECTS\Agents-Lobby\agents.json` inside `agents`:
+5. **Register:** append to `F:\DEVELOPMENT\AI\PROJECTS\Agents-Lobby\agents.json` inside `agents`:
 
    ```json
    { "name": "<human's name>", "project": "<project name>", "session": "ses_..." }
    ```
 
    The bridge re-reads `agents.json` on every request — no restart needed.
-5. **Report** to the human: the name, session ID, and project directory registered.
+6. **Report** to the human: the name, session ID, project directory, and whether the coordinator template was copied or already existed.
 
 ## Auth
 
@@ -48,4 +59,4 @@ The local OpenCode server requires HTTP Basic auth: username `opencode`, passwor
 
 ## When NOT to Use
 
-Registering an existing session the human already created → skip steps 1–2, start at step 3 with the known session ID.
+Registering an existing session the human already created → skip the dedup check and session creation; still do provisioning (step 2) and ask the name (step 3), then register (step 5) with the known session ID.
