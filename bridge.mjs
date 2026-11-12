@@ -65,7 +65,7 @@ async function prompt(sessionID, text, delivery = 'queue') {
   });
 }
 
-const WAKE_PROMPT = `New messages were appended to ${MESSAGE_FILE}. Read the latest lines at the bottom of the file and respond.`;
+const WAKE_PROMPT = '[message received]'; // expanded by the boss's AGENTS.md (wake trigger)
 
 // Token-free coalescing: a plain HTTP inbox check decides whether a wake is
 // already pending; one pending wake reads all accumulated lines in one go.
