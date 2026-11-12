@@ -10,6 +10,7 @@ Create an OpenCode session in a project directory, get its session ID, then regi
 ## Steps (in order)
 
 1. **Dedup check:** `GET /api/session?directory=<project dir>` (with auth, below). If a session already exists there, confirm with the human whether to reuse it before creating a new one.
+   - **Reuse path:** skip step 4 entirely (the session already exists — no title). Still do step 2 (provisioning) and step 3 (ask the name), then register in step 5 with the existing session ID.
 2. **Provision the coordinator agent in the project** (before or after session creation):
    - Copy the template at `<this skill's directory>/../../../.placeholder/agent/coordinator.md`
      to `<project dir>/.opencode/agents/coordinator.md` — **only if that file does not
@@ -59,4 +60,4 @@ The local OpenCode server requires HTTP Basic auth: username `opencode`, passwor
 
 ## When NOT to Use
 
-Registering an existing session the human already created → skip the dedup check and session creation; still do provisioning (step 2) and ask the name (step 3), then register (step 5) with the known session ID.
+Registering an existing session the human already created → same as the reuse path at step 1: skip the dedup question and step 4, still do provisioning (step 2) and ask the name (step 3), then register (step 5) with the known session ID.
