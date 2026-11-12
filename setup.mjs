@@ -4,7 +4,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const SECTION_FILE = './agents-md-section.md';
-const SECTION_HEADER = '## 8.1 Agent Lobby';
+// Match any heading variant: "## Agent Lobby", "## 8.1 Agent Lobby", "### 9. Agent Lobby", etc.
+const SECTION_PATTERN = /^#{1,6} [\d.]*\s*Agent Lobby\b/m;
 const GLOBAL_AGENTS_MD = path.join(os.homedir(), '.config', 'opencode', 'AGENTS.md');
 const REGISTRY = './agents.json';
 const TEMPLATE = './agents.example.json';
@@ -46,7 +47,7 @@ if (agentsMd === null) {
   await fs.mkdir(path.dirname(GLOBAL_AGENTS_MD), { recursive: true });
   await fs.writeFile(GLOBAL_AGENTS_MD, section, 'utf8');
   report.push(`DONE created ${GLOBAL_AGENTS_MD} with the Agent Lobby section`);
-} else if (agentsMd.includes(SECTION_HEADER)) {
+} else if (SECTION_PATTERN.test(agentsMd)) {
   report.push(`OK   Agent Lobby section already in global AGENTS.md, skipped`);
 } else {
   const sep = agentsMd.endsWith('\n') ? '\n' : '\n\n';
