@@ -69,6 +69,30 @@ Inbound webhook messages are appended to `incoming_messages.txt` as
 via OpenCode's prompt API — but only if no wake prompt is already pending
 (coalescing: one wake reads all accumulated lines in one batch).
 
+## Installation / setup procedure
+
+Run this after cloning (in the repo folder):
+
+```sh
+node setup.mjs
+```
+
+It performs the mechanical parts of onboarding:
+
+1. Checks prerequisites — Node >= 18 and the `opencode` CLI on PATH.
+2. Creates `agents.json` from `agents.example.json` if missing (never overwrites an existing one).
+3. Installs the Agent Lobby rule (§8.1) into the user's global `AGENTS.md`
+   (`~/.config/opencode/AGENTS.md`) — idempotent: skips when the
+   `## 8.1 Agent Lobby` header is already present; creates the file if missing.
+   The exact section text lives in `agents-md-section.md` (single source of truth).
+4. Verifies the local OpenCode service is reachable.
+
+It does **not** start the bridge, send messages, or touch anything beyond the
+two config files and the global AGENTS.md.
+
+**After setup:** fill real session IDs into `agents.json`, then start the
+bridge with `node bridge.mjs`.
+
 ## Running
 
 ```sh
