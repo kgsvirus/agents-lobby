@@ -34,7 +34,8 @@ boss ──POST /send──▶ bridge ──▶ OpenCode prompt API ──▶ pr
     instructions mandate a check — e.g. Git is authoritative — they take
     precedence over lobby economy rules.)
   - Keep the webhook message short: a compact summary (aim ≤ ~10 lines).
-    No logs, no file dumps, no step-by-step narration.
+    No logs, no file dumps, no step-by-step narration — unless the boss/human
+    asked for a full summary.
   - After the webhook POST succeeds, your visible session output is just one
     line: `Reply sent.` Do **not** restate the reply content, summarize it, or
     narrate what you did — the human reads replies on the boss/lobby side.
