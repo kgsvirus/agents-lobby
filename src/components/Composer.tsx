@@ -97,7 +97,9 @@ export function Composer({ agents, view, onSent }: Props) {
               >
               {(view.kind === 'project'
                 ? agents.filter((a) => a.project === view.name)
-                : agents
+                : view.kind === 'agent'
+                  ? agents.filter((a) => a.name === view.name)
+                  : agents
               ).map((a) => (
                 <label
                   key={a.name}
