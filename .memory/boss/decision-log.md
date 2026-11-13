@@ -18,6 +18,25 @@
 > the existing entry, remove the new one, or change nothing. Only truly new
 > decisions get new entries.
 >
+> Memory-maintenance rule: whenever memory is updated, always cross-check
+> the other memory files (decision-log / local-context / behavior /
+> decision-authority) for redundancy, content that can carry (move to its
+> proper home), and alignment drift — proactively, without being asked.
+> Flag anything found in the update report.
+>
+> Classification rule: when adding or moving memory content, verify
+> whether it is **universal** (public → `decision-log.md`,
+> `decision-authority.md`, `behavior.md` — committed) or
+> **machine-specific** (personal → `local-context.md` — gitignored).
+> Machine-specific content never enters committed files; universal content
+> never hides in personal ones. When unsure, ask the human.
+>
+> Docs-sync rule: when making changes to memory, features, protocol,
+> instructions, or behavior, always check `README.md` (human) and
+> `PROTOCOL.md` (agents) — and the boss `AGENTS.md` — for content that
+> needs updating or alignment per D13a. Proactively, without being asked;
+> flag anything found in the update report.
+>
 > Last updated: 2026-11-14 (vision recorded).
 
 ## System snapshot (universal facts)
@@ -39,8 +58,8 @@
   sidebar Boss → All → projects → agents; sender-based alignment (Human
   right, others left) with label above bubble; picker scoped per view;
   Dark/Light theme (system default, persisted, WCAG AA contrast).
-- **Commit format:** `feat|fix (v1): <summary>`; commits only on explicit
-  human approval; **push is human-only**. Releases: annotated tag after
+- **Commit format:** `feat|fix (v1): <summary>`; push is human-only; commit
+  and send gates — see `behavior.md`. Releases: annotated tag after
   version bump.
 - **Onboarding:** `node setup.mjs` (idempotent, heading-variant-matching
   global-AGENTS.md install); `registering-lobby-agents` skill for new agents.
@@ -108,15 +127,21 @@
 - **D16** Boss memory (under `.memory/boss/` in this repo): **`decision-log.md`**
   (committed — universal decision record), **`local-context.md`** (gitignored
   — machine state: registry, delegate rulings, local open items; seeded from
-  `local-context.example.md`), and **`decision-authority.md`** (committed —
+  `local-context.example.md`), **`decision-authority.md`** (committed —
   public mirror of the decision-authority rule + escalation list; machine
-  rulings live in local-context). Boss `AGENTS.md` points to all three.
-  — approved (current, D20)
+  rulings live in local-context), and **`behavior.md`** (committed —
+  behavior gates + corrections log). Boss `AGENTS.md` points to all four.
+  — approved (current, D20/D21)
 - **D20** Public decision-authority file (`.memory/boss/decision-authority.md`):
   the delegation rule + escalation list, published for any human running
   this boss agent; machine-specific rulings stay in `local-context.md`
   (gitignored) — published file carries the rule, not other humans'
   project rulings. — approved
+- **D21** Behavior memory (`.memory/boss/behavior.md`, committed): the
+  behavior gates (exploratory = proposal; ambiguous gets clarified;
+  draft-first; commit gate; send gate) + corrections log of the incidents
+  that produced them. Boss `AGENTS.md` carries the condensed gates
+  always-in-context. — approved
 - **D17** Decision authority rule (boss `AGENTS.md`): delegated work makes the
   boss the decision authority for that work; escalate only for
   scope-change/new-feature/irreversible/credentials-or-cross-project/
@@ -154,8 +179,3 @@
 - **O08** Agent-to-agent direct messaging — out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
-- **O11** Vision improvement shortlist (human approved noting only, 2026-11-14
-  — not started, revisit later): 1) message database (O01), 2) daily briefing
-  (cross-project status digest), 3) everyday task inbox (non-project asks),
-  4) proactive notifications, 5) per-project memory (O10), 6) close O02
-  (full channel capture), 7) natural-language interface.
