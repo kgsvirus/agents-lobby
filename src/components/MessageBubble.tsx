@@ -23,24 +23,22 @@ export function MessageBubble({ m, flip }: { m: Message; flip?: boolean }) {
   return (
     <div
       className={`mb-2.5 w-fit max-w-[70%] whitespace-pre-wrap break-words rounded-xl px-2.5 py-1.5 ${
-        right
-          ? 'ml-auto rounded-br-sm text-right'
-          : 'mr-auto rounded-bl-sm'
+        right ? 'ml-auto rounded-br-sm text-right' : 'mr-auto rounded-bl-sm'
       } ${
         kind === 'boss'
-          ? 'bg-blue-900/80'
+          ? 'bg-blue-900 text-white'
           : kind === 'human'
-            ? 'bg-emerald-700'
-            : 'bg-gray-200 dark:bg-[#2a2a2a]'
+            ? 'bg-emerald-700 text-white'
+            : 'bg-gray-100 text-gray-900 dark:bg-[#2a2a2a] dark:text-gray-200'
       }`}
     >
       <div
         className={`mb-0.5 text-[10px] ${
           kind === 'boss'
-            ? 'text-blue-300'
+            ? 'text-blue-200'
             : kind === 'human'
               ? 'text-emerald-200'
-              : 'text-green-600 dark:text-green-400'
+              : 'text-green-700 dark:text-green-400'
         }`}
       >
         {meta}

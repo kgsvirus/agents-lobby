@@ -47,7 +47,7 @@ export function Sidebar({
         className={`row cursor-pointer rounded-md px-2 py-1.5 ${active({ kind: 'boss' })}`}
       >
         <b>Boss</b>
-        <span className="text-[11px] text-gray-500">
+        <span className="text-[11px] text-gray-600 dark:text-gray-400">
           {msgs.filter((m) => m.from === 'human').length
             ? ` — ${hh(msgs.filter((m) => m.from === 'human').slice(-1)[0].time)}`
             : ''}
@@ -66,7 +66,7 @@ export function Sidebar({
             onClick={(e) => onSelect({ kind: 'project', name: project }, e.currentTarget)}
           >
             <span
-              className="text-gray-500"
+              className="text-gray-600 dark:text-gray-400"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleExpand(project);
@@ -75,7 +75,7 @@ export function Sidebar({
               {expanded.has(project) ? '▾' : '▸'}
             </span>
             <b>{project}</b>
-            <span className="text-[11px] text-gray-500">— {lastFor(list.map((a) => a.name))}</span>
+            <span className="text-[11px] text-gray-600 dark:text-gray-400">— {lastFor(list.map((a) => a.name))}</span>
           </div>
           {list.map((a) => (
             <div
@@ -85,7 +85,7 @@ export function Sidebar({
               onClick={(e) => onSelect({ kind: 'agent', name: a.name }, e.currentTarget)}
             >
               {a.name}{' '}
-              <span className="text-[11px] text-gray-500">— {lastFor([a.name])}</span>
+              <span className="text-[11px] text-gray-600 dark:text-gray-400">— {lastFor([a.name])}</span>
             </div>
           ))}
         </div>
