@@ -100,6 +100,19 @@
   `[from: <name>] [to: <last prompter>]` (lastPromptFrom map, updated by
   /send; defaults to boss); boss-session replies log `[to: human]`.
   Historical log lines keep their original tags (append-only). — approved
+- **D19** Registration flow v2 + template identity line (restores D09's name
+  gap): the coordinator template carries the identity line ("You are
+  registered as this project's `name` in the lobby's `agents.json`"); the
+  registering skill handles existing-coordinator projects via tolerant
+  detection (heading variant or content mention) with three cases — append
+  the template's Lobby communication section, align a differing section to
+  the template copy, or leave aligned sections untouched — plus one identity
+  message (name embedded) as the only permitted first message; reuse path
+  includes the reuse/name message. The v2 rewrite had dropped the name line
+  (unlogged then; that gap caused `ruben` to infer its name; its project used
+  its own coordinator.md so no template copy reached it). Identity tell sent
+  to ruben; TaskFlow's existing coordinator.md got the lobby section
+  appended. — approved
 
 ## Open items (system-level)
 

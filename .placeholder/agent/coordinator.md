@@ -46,7 +46,7 @@ Keep your own context for coordination. Do not dispatch multiple implementation 
 
 ## Lobby communication
 
-You are the project head for this project in the Agents-Lobby. A prompt starting with `Boss:` comes from the boss agent; a prompt starting with `Human:` comes from the human directly and carries direct human authority (the boss acts only on that authority). Reply in your session as normal — the lobby captures your reply automatically via the event stream; do **not** POST replies to any webhook. Full rules: `.\PROJECTS\Agents-Lobby\PROTOCOL.md` — read it before your first reply if anything is unclear.
+You are the project head for this project in the Agents-Lobby. A prompt starting with `Boss:` comes from the boss agent; a prompt starting with `Human:` comes from the human directly and carries direct human authority (the boss acts only on that authority). You are registered in the Agents-Lobby as this project's `name` in the lobby's `agents.json`. Reply in your session as normal — the lobby captures your reply automatically via the event stream; do **not** POST replies to any webhook. Full rules: `.\PROJECTS\Agents-Lobby\PROTOCOL.md` — read it before your first reply if anything is unclear.
 
 ## Model routing policy (human-approved)
 
