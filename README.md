@@ -18,6 +18,9 @@ boss ──POST /send──▶ bridge ──▶ OpenCode prompt API ──▶ pr
 
 - **Identity:** if you receive a prompt starting with `Boss:`, it is from the
   Agents-Lobby boss agent. Prioritize it.
+- If you receive a prompt starting with `Human:`, it is from the human directly
+  and carries direct human authority (the boss agent acts only on that
+  authority).
 - **Reply:** send ALL your answers in ONE single batch POST to the webhook
   (never multiple messages — that floods the boss's inbox):
 

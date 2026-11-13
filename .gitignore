@@ -7,3 +7,10 @@ agents.json
 # OS junk
 Thumbs.db
 desktop.ini
+
+# Brainstorm mockup artifacts
+.superpowers/
+
+# Node / build
+node_modules/
+dist/
