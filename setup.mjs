@@ -9,6 +9,9 @@ const SECTION_PATTERN = /^#{1,6} [\d.]*\s*Agent Lobby\b/m;
 const GLOBAL_AGENTS_MD = path.join(os.homedir(), '.config', 'opencode', 'AGENTS.md');
 const REGISTRY = './agents.json';
 const TEMPLATE = './agents.example.json';
+const LOCAL_CONTEXT_DIR = './.memory/boss';
+const LOCAL_CONTEXT = path.join(LOCAL_CONTEXT_DIR, 'local-context.md');
+const LOCAL_CONTEXT_EXAMPLE = path.join(LOCAL_CONTEXT_DIR, 'local-context.example.md');
 
 const report = [];
 let failed = false;
@@ -33,6 +36,16 @@ try {
 } catch {
   await fs.copyFile(TEMPLATE, REGISTRY);
   report.push(`DONE created ${REGISTRY} from ${TEMPLATE} - fill in real session IDs`);
+}
+
+// 2b. Local boss memory from example (never overwrite)
+try {
+  await fs.access(LOCAL_CONTEXT);
+  report.push(`OK   ${LOCAL_CONTEXT} exists, left untouched`);
+} catch {
+  await fs.mkdir(LOCAL_CONTEXT_DIR, { recursive: true });
+  await fs.copyFile(LOCAL_CONTEXT_EXAMPLE, LOCAL_CONTEXT);
+  report.push(`DONE created ${LOCAL_CONTEXT} from ${LOCAL_CONTEXT_EXAMPLE}`);
 }
 
 // 3. Global AGENTS.md: install section 8.1 idempotently

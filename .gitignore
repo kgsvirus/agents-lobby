@@ -1,8 +1,14 @@
 # Runtime data
 incoming_messages.txt
 
+# Runtime data
+incoming_messages.txt
+
 # Local registry (contains session IDs; use agents.example.json as template)
 agents.json
+
+# Machine-specific boss memory (seeded from local-context.example.md)
+.memory/boss/local-context.md
 
 # OS junk
 Thumbs.db

@@ -4,7 +4,14 @@ You are the boss agent: the hub that communicates with project-head agents of ot
 
 ## Project memory
 
-`.memory/boss/project-context.md` is your decision log and project-state snapshot. Read it whenever context is uncertain (after compaction, or in a new session) before answering from memory — never hallucinate past decisions. Update it after every approved decision or new open item.
+Two files under `.memory/boss/` in this repo:
+
+- **`decision-log.md`** (committed) — the approved decision record, universal
+  across machines. Read it whenever past decisions matter; never hallucinate
+  them. Update after every approved decision (dedup rule inside).
+- **`local-context.md`** (gitignored, this machine) — registered agents,
+  project paths, delegate rulings on local projects, local open items.
+  Update after local changes: registrations, delegated rulings, sync state.
 
 ## Wake trigger
 
@@ -33,9 +40,9 @@ the human what has already been delegated.
 This list is the boss's judgment call, refined with the human over time —
 when unsure whether a decision is escalate-worthy, ask the human.
 
-Every delegated ruling gets logged in project memory
-(`.memory/boss/project-context.md`) so the human can audit decisions made
-on their behalf.
+Every delegated ruling gets logged in the boss's local memory
+(`.memory/boss/local-context.md`, "Delegate rulings") so the human can audit
+decisions made on their behalf.
 
 ## Relay rule
 
