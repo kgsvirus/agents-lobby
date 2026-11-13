@@ -1,8 +1,9 @@
 import { Message, hh } from '../data/api';
 
-export function MessageBubble({ m }: { m: Message }) {
+// flip: in the Boss view the boss is the counterpart → left; human (you) stays right.
+export function MessageBubble({ m, flip }: { m: Message; flip?: boolean }) {
   const kind = m.from === 'boss' ? 'boss' : m.from === 'human' ? 'human' : 'agent';
-  const sent = kind !== 'agent';
+  const right = kind === 'human' || (kind === 'boss' && !flip);
   const meta =
     kind === 'boss' ? (
       <>
@@ -22,11 +23,15 @@ export function MessageBubble({ m }: { m: Message }) {
   return (
     <div
       className={`mb-2.5 w-fit max-w-[70%] whitespace-pre-wrap break-words rounded-xl px-2.5 py-1.5 ${
+        right
+          ? 'ml-auto rounded-br-sm text-right'
+          : 'mr-auto rounded-bl-sm'
+      } ${
         kind === 'boss'
-          ? 'ml-auto rounded-br-sm bg-blue-900/80 text-right'
+          ? 'bg-blue-900/80'
           : kind === 'human'
-            ? 'ml-auto rounded-br-sm bg-emerald-700 text-right'
-            : 'mr-auto rounded-bl-sm bg-gray-200 dark:bg-[#2a2a2a]'
+            ? 'bg-emerald-700'
+            : 'bg-gray-200 dark:bg-[#2a2a2a]'
       }`}
     >
       <div
