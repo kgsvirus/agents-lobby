@@ -5,9 +5,10 @@
 > (it describes only this machine); `setup.mjs` seeds it from
 > `local-context.example.md` on new machines.
 >
-> Universal decisions live in `decision-log.md` (committed). Update this file
-> after local changes: registrations, delegated rulings on local projects,
-> machine sync state.
+> Universal decisions live in `decision-log.md` (committed). The decision
+> authority rule + escalation list: `decision-authority.md` (committed).
+> Update this file after local changes: registrations, delegated rulings on
+> local projects, machine sync state.
 >
 > Last updated: <fill in>
 
