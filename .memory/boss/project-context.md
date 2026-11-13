@@ -87,10 +87,12 @@
 - **D14** Synthetic echo removed: every path it covered is native now
   (webchat prompts arrive as prompts; boss sends visible as shell actions;
   `Human:` sends intentionally boss-invisible). — approved
-- **D15** Routed copies: when relaying project-specific traffic, I post
-  `[from: boss] [to: <agent>]` via `/webhook` so project views carry my
-  commentary; routed copies never wake the boss (`from: "boss"` skip rule).
-  — approved; verified once, human visual confirmation pending (O04)
+- **D15** Routed copies (relaying with `[from: boss] [to: agent]` via
+  `/webhook` so project views carry boss commentary) — **REMOVED by human
+  decision**: relays live in the boss session context only (visible via the
+  session mirror in Boss/All views); webchat `/webhook` routing reverted.
+  Documented for humans in README "Message visibility". (O04 closed with
+  this entry — its verification premise was removed along with D15.)
 - **D16** This memory file (`.memory/boss/project-context.md`) is the boss's
   decision log; boss `AGENTS.md` points to it. — approved (current)
 - **D17** Decision authority rule (boss `AGENTS.md`): delegated work makes the
@@ -108,8 +110,6 @@
   captured). Accepted v1 gap; extension = zero-token fix if wanted.
 - **O03** Possible duplicate delivery in the prompt API (one send produced
   two `[from: human]` log lines once). Unconfirmed; watch.
-- **O04** Routed-copy process (D15): human visual verification of the
-  TaskFlow view pending.
 - **O05** TaskFlow reconciliation doc fixes (stale HEAD hash `46660b3` →
   `52b1288`; gate-count mismatch 268/268 vs 281/281) — await human
   authorization; doc-only edits via ruben's developer.
