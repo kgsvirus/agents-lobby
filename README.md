@@ -49,6 +49,23 @@ human ──webchat (agent/project row)──▶ /send ──▶ project head (a
 - Event-driven: agents are only woken when there is something to read.
 - The bridge (`bridge.mjs`) is a single zero-dependency Node file.
 
+## Message visibility
+
+What appears in each dashboard view:
+
+| Message | 👑 Boss | 🌐 All projects | 📁 Project / agent |
+|---|---|---|---|
+| Boss send to an agent (`Boss: …`) | ✅ | ✅ | ✅ (its project) |
+| Agent reply (captured in-session) | ✗ | ✅ | ✅ (its project) |
+| Human prompt to the boss (webchat Boss row) | ✅ | ✅ | ✗ |
+| Human direct send to an agent (`Human: …`) | ✗ | ✅ | ✅ (its project) |
+| Boss commentary / relays (unrouted) | ✅ | ✅ | ✗ |
+
+**Rule of thumb:** Boss view = the boss↔human channel plus boss sends; project
+and agent views = everything involving that project's agents; All = everything.
+Unrouted boss commentary (status updates, relays) lives in the Boss/All
+channel by design.
+
 ## Installation / setup procedure
 
 Run this after cloning (in the repo folder):
