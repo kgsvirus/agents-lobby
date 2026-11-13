@@ -57,8 +57,9 @@ export const involves = (m: Message, name: string): boolean =>
 
 export const isVisible = (m: Message, view: View, agents: Agent[]): boolean => {
   if (view.kind === 'all') return true;
-  if (view.kind === 'boss')
-    return m.from === 'boss' || m.from === 'human' || m.to === 'boss';
+  // Boss view: my replies + prompts/sends actually addressed to the boss.
+  // Human: direct sends to agents (to: <agent>) bypass the boss by design.
+  if (view.kind === 'boss') return m.from === 'boss' || m.to === 'boss';
   if (view.kind === 'agent') return involves(m, view.name);
   return agents
     .filter((a) => a.project === view.name)
