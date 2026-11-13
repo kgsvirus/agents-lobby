@@ -124,9 +124,12 @@ section points here).
 | File | Purpose |
 |---|---|
 | `bridge.mjs` | Webhook + fan-out + event-listener bridge (zero deps) |
-| `agents.json` | Live registry (gitignored — contains session IDs) |
+| `agents.json` | Live registry (gitignored - contains session IDs) |
 | `agents.example.json` | Registry template |
 | `incoming_messages.txt` | Runtime message log (gitignored) |
+| `.memory/boss/decision-log.md` | Boss decision record (committed, universal) |
+| `.memory/boss/local-context.md` | Machine-specific boss memory (gitignored) |
+| `.memory/boss/local-context.example.md` | Local-memory template |
 | `.placeholder/agents-md-section.md` | Exact global-AGENTS.md section text |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |
 | `.opencode/skills/registering-lobby-agents/` | Session registration skill |
