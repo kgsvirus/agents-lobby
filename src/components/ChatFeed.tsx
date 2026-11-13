@@ -15,7 +15,7 @@ export function ChatFeed({ msgs, flip }: { msgs: Message[]; flip?: boolean }) {
       className="flex flex-1 flex-col overflow-y-auto bg-gray-50 p-3.5 dark:bg-[#1a1a1a]"
     >
       {msgs.length === 0 ? (
-        <div className="m-auto text-gray-500">No messages for this view yet.</div>
+        <div className="m-auto text-gray-600 dark:text-gray-400">No messages for this view yet.</div>
       ) : (
         msgs.map((m, i) => <MessageBubble key={`${m.time}-${i}`} m={m} flip={flip} />)
       )}

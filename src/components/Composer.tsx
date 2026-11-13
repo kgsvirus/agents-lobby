@@ -115,7 +115,7 @@ export function Composer({ agents, view, onSent }: Props) {
                   />
                   <span>
                     {a.name}
-                    <span className="block text-[10px] text-gray-500">{a.project}</span>
+                    <span className="block text-[10px] text-gray-600 dark:text-gray-400">{a.project}</span>
                   </span>
                 </label>
               ))}
