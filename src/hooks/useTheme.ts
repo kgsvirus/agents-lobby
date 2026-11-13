@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 
-type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light';
 
-const apply = (t: Theme) => document.documentElement.classList.toggle('dark', t === 'dark');
+const apply = (t: Theme) => {
+  document.documentElement.classList.toggle('dark', t === 'dark');
+  document.documentElement.style.colorScheme = t;
+};
 
 // Default follows the system; the buttons override and persist the choice.
 export function useTheme(): [Theme, (t: Theme) => void] {
