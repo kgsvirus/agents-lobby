@@ -38,6 +38,10 @@ async function loadRegistry() {
   return JSON.parse(await fs.readFile(CONFIG_FILE, "utf8"));
 }
 
+// Who last prompted each agent (human | boss) — an agent's reply is directed
+// to its last prompter. Default: boss (fallback when history is unknown).
+const lastPromptFrom = new Map();
+
 // Local service credentials: HTTP Basic with the password from the service
 // registration file (never stored in this repo).
 const SERVICE_FILE = path.join(
@@ -165,11 +169,12 @@ async function listenEvents() {
         } else if (e.type === "session.text.ended" && d.text) {
           if (isBoss) {
             await appendMessage(
-              `[${new Date().toISOString()}] [from: boss] ${d.text}\n`,
+              `[${new Date().toISOString()}] [from: boss] [to: human] ${d.text}\n`,
             );
           } else {
+            const replyTo = lastPromptFrom.get(agentName) || "boss";
             await appendMessage(
-              `[${new Date().toISOString()}] [from: ${agentName}] ${d.text}\n`,
+              `[${new Date().toISOString()}] [from: ${agentName}] [to: ${replyTo}] ${d.text}\n`,
             );
             // An agent answered — wake the boss (coalesced, same as webhook).
             wakeBoss();
@@ -314,7 +319,10 @@ const server = http.createServer(async (req, res) => {
         });
       const prefix = sender === "human" ? "Human" : "Boss";
       const results = await Promise.allSettled(
-        targets.map((a) => prompt(a.session, `${prefix}: ${text}`)),
+        targets.map((a) => {
+          lastPromptFrom.set(a.name, sender);
+          return prompt(a.session, `${prefix}: ${text}`);
+        }),
       );
       const sent = [];
       const skipped = [];
