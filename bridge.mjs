@@ -114,10 +114,11 @@ async function appendMessage(entry) {
   await fs.appendFile(MESSAGE_FILE, prefix + entry, "utf8");
 }
 
-// Mirror boss-session traffic (desktop typing, my replies) into the log so the
-// web UI sees the whole picture. Zero tokens: raw server event stream.
-// Volatile by contract — reconnects after drops; no replay, so brief bridge
-// downtime loses events (accepted for v1).
+// Mirror session traffic into the log so the web UI sees the whole picture.
+// Zero tokens: raw server event stream. Volatile by contract — reconnects
+// after drops; no replay, so brief bridge downtime loses events (v1).
+// Boss session: human input + my replies. Agent sessions: their session
+// replies capture automatically (protocol v2 — agents no longer webhook).
 async function listenEvents() {
   if (!SERVER_URL) return;
   try {
@@ -142,12 +143,17 @@ async function listenEvents() {
           continue;
         }
         const d = e.data || {};
-        if (d.sessionID !== config.boss.session) continue;
+        const reg = await loadRegistry();
+        const bossSession = reg.boss.session;
+        const agentName = reg.agents.find((a) => a.session === d.sessionID)?.name;
+        const isBoss = d.sessionID === bossSession;
+        if (!isBoss && !agentName) continue;
         if (e.type === "session.inbox.enqueued") {
           const item = d.item || {};
-          // Skip synthetic echoes (already logged by /send) and the bridge's
-          // own wake prompt — only genuine human input gets logged.
+          // Boss session only. Skip synthetic echoes (already logged by /send)
+          // and the bridge's own wake prompt — only genuine human input logs.
           if (
+            isBoss &&
             item.type === "user" &&
             item.payload?.text &&
             item.payload.text !== "[message received]"
@@ -157,9 +163,17 @@ async function listenEvents() {
             );
           }
         } else if (e.type === "session.text.ended" && d.text) {
-          await appendMessage(
-            `[${new Date().toISOString()}] [from: boss] ${d.text}\n`,
-          );
+          if (isBoss) {
+            await appendMessage(
+              `[${new Date().toISOString()}] [from: boss] ${d.text}\n`,
+            );
+          } else {
+            await appendMessage(
+              `[${new Date().toISOString()}] [from: ${agentName}] ${d.text}\n`,
+            );
+            // An agent answered — wake the boss (coalesced, same as webhook).
+            wakeBoss();
+          }
         }
       }
     }
@@ -313,27 +327,6 @@ const server = http.createServer(async (req, res) => {
         await appendMessage(
           `[${new Date().toISOString()}] [from: ${sender}] [to: ${sent.join(", ")}] ${text}\n`,
         );
-        // Mirror the outgoing send into the boss session's transcript without
-        // running the model (resume: false = zero token cost).
-        try {
-          await api(
-            `/api/session/${(await loadRegistry()).boss.session}/synthetic`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                text:
-                  sender === "boss"
-                    ? `You sent to ${sent.join(", ")}: ${text}`
-                    : `Human sent to ${sent.join(", ")}: ${text}`,
-                resume: false,
-                delivery: "queue",
-              }),
-            },
-          );
-        } catch (err) {
-          console.error("[Send] Synthetic echo failed:", err.message);
-        }
       }
       console.log(
         `[Send] Boss message sent to: ${sent.join(", ") || "(none)"}`,
