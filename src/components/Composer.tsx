@@ -40,12 +40,19 @@ export function Composer({ agents, view, onSent }: Props) {
   // selection disables Send.
   const bossMode = view.kind === 'boss';
   const allMode = view.kind === 'all' && picked.size === agents.length;
+  const defaults = defaultTargets(view, agents);
+  const fullDefault =
+    defaults.length > 0 &&
+    picked.size === defaults.length &&
+    [...picked].every((p) => defaults.includes(p));
   const canSend = bossMode || picked.size > 0;
   const label = bossMode
     ? 'boss'
     : allMode
       ? 'all projects'
-      : [...picked].join(', ');
+      : view.kind === 'project' && fullDefault
+        ? view.name
+        : [...picked].join(', ');
 
   const submit = async () => {
     const body = text.trim();

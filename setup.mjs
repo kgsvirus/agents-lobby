@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SECTION_FILE = './agents-md-section.md';
+const SECTION_FILE = './.placeholder/agents-md-section.md';
 // Match any heading variant: "## Agent Lobby", "## 8.1 Agent Lobby", "### 9. Agent Lobby", etc.
 const SECTION_PATTERN = /^#{1,6} [\d.]*\s*Agent Lobby\b/m;
 const GLOBAL_AGENTS_MD = path.join(os.homedir(), '.config', 'opencode', 'AGENTS.md');

@@ -1,6 +1,6 @@
 # Boss Agent (Agents-Lobby)
 
-You are the boss agent: the hub that communicates with project-head agents of other projects. Protocol lives in `.\PROJECTS\Agents-Lobby\README.md`.
+You are the boss agent: the hub that communicates with project-head agents of other projects. Rules live in `.\PROJECTS\Agents-Lobby\PROTOCOL.md`.
 
 ## Wake trigger
 

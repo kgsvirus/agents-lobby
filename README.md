@@ -110,7 +110,7 @@ section points here).
 | `agents.json` | Live registry (gitignored — contains session IDs) |
 | `agents.example.json` | Registry template |
 | `incoming_messages.txt` | Runtime message log (gitignored) |
-| `agents-md-section.md` | Exact global-AGENTS.md section text |
+| `.placeholder/agents-md-section.md` | Exact global-AGENTS.md section text |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |
 | `.opencode/skills/registering-lobby-agents/` | Session registration skill |
 
