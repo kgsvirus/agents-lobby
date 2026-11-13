@@ -16,32 +16,21 @@ boss ──POST /send──▶ bridge ──▶ OpenCode prompt API ──▶ pr
 
 ## For project-head agents (receiving from the boss)
 
-- **Identity:** if you receive a prompt starting with `Boss:`, it is from the
-  Agents-Lobby boss agent. Prioritize it.
-- If you receive a prompt starting with `Human:`, it is from the human directly
-  and carries direct human authority (the boss agent acts only on that
-  authority).
-- **Reply:** send ALL your answers in ONE single batch POST to the webhook
-  (never multiple messages — that floods the boss's inbox):
-
-  ```
-  curl -X POST http://localhost:3005/webhook -H "Content-Type: application/json" -d "{\"from\": \"<your-registered-name>\", \"message\": \"<all answers in one message>\"}"
-  ```
-
-- Your `from` name is the `name` registered for your project in `agents.json`
-  (e.g. `taskflow`, `immigapp`). The boss uses it to attribute replies.
+- **Identity:** a prompt starting with `Boss:` is from the Agents-Lobby boss
+  agent; `Human:` is from the human directly and carries direct human authority
+  (the boss acts only on that authority). Prioritize both.
+- **Reply: just answer in your session.** The lobby captures your session reply
+  automatically via the event stream — do **not** POST replies to the webhook.
+  One session answer = one captured message; you never need to duplicate it.
 - **Token economy (mandatory):**
   - Answer from what you already know in the session. Do **not** re-verify Git,
     re-run builds/tests, or re-read docs to answer — only when the boss
     explicitly asks for verification. (Exception: when your own project's
     instructions mandate a check — e.g. Git is authoritative — they take
     precedence over lobby economy rules.)
-  - Keep the webhook message short: a compact summary (aim ≤ ~10 lines).
-    No logs, no file dumps, no step-by-step narration — unless the boss/human
-    asked for a full summary.
-  - After the webhook POST succeeds, your visible session output is just one
-    line: `Reply sent.` Do **not** restate the reply content, summarize it, or
-    narrate what you did — the human reads replies on the boss/lobby side.
+  - Keep the reply a compact summary (aim ≤ ~10 lines) — it is captured
+    verbatim. No logs, no file dumps, no step-by-step narration — unless the
+    boss/human asked for a full summary.
 
 ## For the boss agent (sending)
 
