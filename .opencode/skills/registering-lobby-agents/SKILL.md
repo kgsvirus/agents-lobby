@@ -31,7 +31,7 @@ Create an OpenCode session in a project directory, get its session ID, then regi
      -d "{\"title\": \"(<name>)<project name>\", \"location\": {\"directory\": \"<project dir>\"}}"
    ```
 
-   - **Title format is fixed: `(<name>)<project name>`** — e.g. `(taskflow2)TaskFlow` — using the name from step 3.
+   - **Title format is fixed: `(<name>)<project name>`** — e.g. `(Grae)TaskFlow` — using the name from step 3.
    - `location.directory` binds the session to the project — required.
    - Optional `agent` field pins an agent at creation (e.g. `"agent": "coordinator"` once provisioned). List valid IDs with `GET /api/agent`; project-specific agents come from that project's config. Omit to use the default.
    - The response's `data.id` (`ses_...`) is the session ID. It is returned immediately; no waiting.
