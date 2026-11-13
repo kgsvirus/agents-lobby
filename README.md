@@ -56,7 +56,7 @@ What appears in each dashboard view:
 | Message | 👑 Boss | 🌐 All projects | 📁 Project / agent |
 |---|---|---|---|
 | Boss send to an agent (`Boss: …`) | ✅ | ✅ | ✅ (its project) |
-| Agent reply (captured in-session) | ✗ | ✅ | ✅ (its project) |
+| Agent reply | ✅ if replying to a `Boss:` prompt ✗ if replying to your direct send | ✅ | ✅ (its project) |
 | Human prompt to the boss (webchat Boss row) | ✅ | ✅ | ✗ |
 | Human direct send to an agent (`Human: …`) | ✗ | ✅ | ✅ (its project) |
 | Boss commentary / relays (unrouted) | ✅ | ✅ | ✗ |
