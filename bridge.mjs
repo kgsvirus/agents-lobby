@@ -114,6 +114,61 @@ async function appendMessage(entry) {
   await fs.appendFile(MESSAGE_FILE, prefix + entry, "utf8");
 }
 
+// Mirror boss-session traffic (desktop typing, my replies) into the log so the
+// web UI sees the whole picture. Zero tokens: raw server event stream.
+// Volatile by contract — reconnects after drops; no replay, so brief bridge
+// downtime loses events (accepted for v1).
+async function listenEvents() {
+  if (!SERVER_URL) return;
+  try {
+    const authorization = await authHeader();
+    const res = await fetch(`${SERVER_URL}/api/event`, { headers: { authorization } });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        let e;
+        try {
+          e = JSON.parse(line.slice(5));
+        } catch {
+          continue;
+        }
+        const d = e.data || {};
+        if (d.sessionID !== config.boss.session) continue;
+        if (e.type === "session.inbox.enqueued") {
+          const item = d.item || {};
+          // Skip synthetic echoes (already logged by /send) and the bridge's
+          // own wake prompt — only genuine human input gets logged.
+          if (
+            item.type === "user" &&
+            item.payload?.text &&
+            item.payload.text !== "[message received]"
+          ) {
+            await appendMessage(
+              `[${new Date().toISOString()}] [from: human] [to: boss] ${item.payload.text}\n`,
+            );
+          }
+        } else if (e.type === "session.text.ended" && d.text) {
+          await appendMessage(
+            `[${new Date().toISOString()}] [from: boss] ${d.text}\n`,
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Events] stream dropped:", err.message);
+  }
+  setTimeout(listenEvents, 5000);
+}
+
 const server = http.createServer(async (req, res) => {
   const json = (code, obj) => {
     res.writeHead(code, { "Content-Type": "application/json" });
@@ -205,16 +260,13 @@ const server = http.createServer(async (req, res) => {
       if (!SERVER_URL)
         return json(500, { error: "OpenCode server URL not discovered" });
       const config = await loadRegistry();
-      // Prompt the boss session directly (delivery queue wakes it when idle)
-      // and log the human's words for the feed.
+      // Prompt the boss session directly (delivery queue wakes it when idle).
+      // Logging is handled by the event-stream listener (inbox.enqueued).
       await api(`/api/session/${config.boss.session}/prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, delivery: "queue" }),
       });
-      await appendMessage(
-        `[${new Date().toISOString()}] [from: human] [to: boss] ${text}\n`,
-      );
       console.log(`[Prompt] Human prompted the boss: "${text}"`);
       json(200, { status: "ok" });
     } catch (err) {
@@ -298,6 +350,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(WEBHOOK_PORT, () => {
   console.log(
-    `[Bridge] Listening on http://localhost:${WEBHOOK_PORT}/webhook and /send`,
+    `[Bridge] Listening on http://localhost:${WEBHOOK_PORT}/webhook, /send, /prompt and /ui`,
   );
+  listenEvents();
 });
