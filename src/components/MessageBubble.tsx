@@ -1,27 +1,31 @@
 import { Message, hh } from '../data/api';
 
 // Alignment is fixed by sender identity: Human (you) floats right in every
-// view; agents and the boss float left. The sender label sits above the
-// bubble, aligned to the same direction.
-export function MessageBubble({ m }: { m: Message }) {
+// view; agents and the boss float left. Labels:
+// - Directional (`from → to`, Human: `to ← human`) whenever the message has
+//   a non-empty recipient — agent-directed traffic carries direction in every
+//   view, and All-project traffic shows direction when a recipient exists.
+// - Boss↔human channel messages (no recipient / to: boss prompts) keep the
+//   plain `Sender · time` label in the Boss view.
+export function MessageBubble({
+  m,
+  directional,
+}: {
+  m: Message;
+  directional?: boolean;
+}) {
   const kind = m.from === 'boss' ? 'boss' : m.from === 'human' ? 'human' : 'agent';
   const right = kind === 'human';
-  const meta =
-    kind === 'boss' ? (
-      <>
-        Boss · {hh(m.time)}
-        {m.to && <b> → {m.to}</b>}
-      </>
-    ) : kind === 'human' ? (
-      <>
-        Human · {hh(m.time)}
-        {m.to && m.to !== 'boss' && <b> → {m.to}</b>}
-      </>
-    ) : (
-      <>
-        {m.from} · {hh(m.time)}
-      </>
-    );
+  const to = m.to || (m.from === 'boss' ? 'human' : 'boss');
+  const agentDirected =
+    kind === 'agent' ||
+    (!!m.to && m.to !== 'boss' && m.to !== 'human');
+  const showDirection = agentDirected || (directional && !!m.to);
+  const meta = showDirection
+    ? right
+      ? `${to} ← human`
+      : `${m.from} → ${to}`
+    : `${kind === 'boss' ? 'Boss' : 'Human'} · ${hh(m.time)}`;
   return (
     <div className={`mb-2.5 flex w-fit max-w-[70%] flex-col ${right ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
       <div

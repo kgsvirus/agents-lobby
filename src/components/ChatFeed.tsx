@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Message } from '../data/api';
 import { MessageBubble } from './MessageBubble';
 
-export function ChatFeed({ msgs }: { msgs: Message[] }) {
+export function ChatFeed({ msgs, directional }: { msgs: Message[]; directional?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function ChatFeed({ msgs }: { msgs: Message[] }) {
       {msgs.length === 0 ? (
         <div className="m-auto text-gray-600 dark:text-gray-400">No messages for this view yet.</div>
       ) : (
-        msgs.map((m, i) => <MessageBubble key={`${m.time}-${i}`} m={m} />)
+        msgs.map((m, i) => <MessageBubble key={`${m.time}-${i}`} m={m} directional={directional} />)
       )}
     </div>
   );

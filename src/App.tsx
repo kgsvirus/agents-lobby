@@ -57,7 +57,10 @@ export default function App() {
             {title}
           </span>
         </div>
-        <ChatFeed msgs={msgs.filter((m) => isVisible(m, view, agents))} />
+        <ChatFeed
+          msgs={msgs.filter((m) => isVisible(m, view, agents))}
+          directional={view.kind !== 'boss'}
+        />
         <Composer
           key={`${view.kind}:${'name' in view ? view.name : ''}`}
           agents={agents}
