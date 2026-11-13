@@ -89,6 +89,14 @@
   rule deleted; README (human) / `PROTOCOL.md` (agent rules) split; §8.1 +
   coordinator template point to `PROTOCOL.md`. — approved; refresher ACKed
   by all pre-v2 agents
+- **D13a** Documentation audience split (refines D13): one audience per
+  document — `README.md` = human operations (about, features, installation,
+  running, files); `PROTOCOL.md` = project-head agent rules (identity,
+  replies, token economy); boss `AGENTS.md` = boss behavior only (wake
+  trigger, sending identity, decision authority, relay rule, memory
+  pointers). Boss-facing content does not live in `PROTOCOL.md` (slimmed to
+  a reference note), and agent-facing content does not live in `README.md`.
+  New docs must declare their audience before being written. — approved
 - **D14** Synthetic echo removed: every path it covered is native now
   (webchat prompts arrive as prompts; boss sends visible as shell actions;
   `Human:` sends intentionally boss-invisible). — approved
