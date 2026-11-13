@@ -1,9 +1,10 @@
 import { Message, hh } from '../data/api';
 
-// flip: in the Boss view the boss is the counterpart → left; human (you) stays right.
-export function MessageBubble({ m, flip }: { m: Message; flip?: boolean }) {
+// Alignment is fixed by sender identity: Human (you) floats right in every
+// view; agents and the boss float left.
+export function MessageBubble({ m }: { m: Message }) {
   const kind = m.from === 'boss' ? 'boss' : m.from === 'human' ? 'human' : 'agent';
-  const right = kind === 'human' || (kind === 'boss' && !flip);
+  const right = kind === 'human';
   const meta =
     kind === 'boss' ? (
       <>
