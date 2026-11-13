@@ -1,66 +1,53 @@
 # Agents-Lobby
 
 A communication hub for OpenCode agents across projects. The **boss agent**
-(the Agents-Lobby session) sends messages to project-head agents; their replies
-flow back through a webhook into `incoming_messages.txt`.
+(the Agents-Lobby session) talks to project-head agents; every project keeps
+its own agents and sessions. One boss, many projects — the hub-and-spoke model
+for cross-project work.
+
+## Features
+
+- **Web dashboard** at `http://localhost:3005/ui` — sidebar (Boss / All
+  projects / projects → agents), messenger-style chat, recipient picker,
+  Dark/Light theme (defaults to your system preference)
+- **Identity model** — `Human:` messages carry direct human authority;
+  `Boss:` messages are the boss agent acting on your behalf
+- **Automatic reply capture** — agents just reply in their sessions; the
+  bridge captures everything via the OpenCode event stream (no webhook
+  replies, no duplication)
+- **Fan-out** — one message to one project, several, or all agents
+- **Event-driven** — agents wake only when there is something to read
+  (trigger → read → action → idle); near-zero token overhead
+- **Onboarding** — `node setup.mjs` after cloning installs prerequisites
+  checks, the agent registry, and the global lobby rule
+
+## Installation
+
+After cloning (in the repo folder):
+
+```sh
+node setup.mjs
+```
+
+Then:
+
+1. Fill real session IDs into `agents.json` (see `agents.example.json`)
+2. Start the bridge: `node bridge.mjs`
+3. Open the dashboard: `http://localhost:3005/ui`
+
+Full setup details in the "Installation / setup procedure" section below.
 
 ## How it works
 
 ```
-project head ──webhook POST──▶ bridge (:3005) ──▶ incoming_messages.txt ──▶ boss (via prompt API)
-boss ──POST /send──▶ bridge ──▶ OpenCode prompt API ──▶ project head session(s)
+project head ──event stream──▶ bridge (:3005) ──▶ incoming_messages.txt ──▶ boss
+boss ──/send──▶ bridge ──▶ OpenCode prompt API ──▶ project head session(s)
+human ──webchat (Boss row)──▶ /prompt ──▶ boss session
+human ──webchat (agent/project row)──▶ /send ──▶ project head (as Human:)
 ```
 
-- Event-driven: agents are only woken when there is something to read. Idle otherwise.
+- Event-driven: agents are only woken when there is something to read.
 - The bridge (`bridge.mjs`) is a single zero-dependency Node file.
-
-## For project-head agents (receiving from the boss)
-
-- **Identity:** a prompt starting with `Boss:` is from the Agents-Lobby boss
-  agent; `Human:` is from the human directly and carries direct human authority
-  (the boss acts only on that authority). Prioritize both.
-- **Reply: just answer in your session.** The lobby captures your session reply
-  automatically via the event stream — do **not** POST replies to the webhook.
-  One session answer = one captured message; you never need to duplicate it.
-- **Token economy (mandatory):**
-  - Answer from what you already know in the session. Do **not** re-verify Git,
-    re-run builds/tests, or re-read docs to answer — only when the boss
-    explicitly asks for verification. (Exception: when your own project's
-    instructions mandate a check — e.g. Git is authoritative — they take
-    precedence over lobby economy rules.)
-  - Keep the reply a compact summary (aim ≤ ~10 lines) — it is captured
-    verbatim. No logs, no file dumps, no step-by-step narration — unless the
-    boss/human asked for a full summary.
-
-## For the boss agent (sending)
-
-**Always get the human's approval before messaging any agent** — by any channel
-(`/send`, `opencode run --session`, or anything else). The boss never contacts
-project heads unprompted.
-
-Fan out to 1, some, or all project heads via the bridge:
-
-```sh
-# one agent
-curl -X POST http://localhost:3005/send -H "Content-Type: application/json" -d "{\"to\": \"taskflow\", \"message\": \"...\"}"
-
-# several
-curl -X POST http://localhost:3005/send -H "Content-Type: application/json" -d "{\"to\": [\"taskflow\", \"immigapp\"], \"message\": \"...\"}"
-
-# all registered agents
-curl -X POST http://localhost:3005/send -H "Content-Type: application/json" -d "{\"to\": \"all\", \"message\": \"...\"}"
-```
-
-The bridge prepends `Boss: ` automatically and delivers through OpenCode's
-session prompt API with `"delivery": "queue"` (waits until the target session
-is idle, then delivers — non-blocking).
-
-## Webhook → boss wake-up
-
-Inbound webhook messages are appended to `incoming_messages.txt` as
-`[ISO-time] [from: <name>] <message>`, then the bridge wakes the boss session
-via OpenCode's prompt API — but only if no wake prompt is already pending
-(coalescing: one wake reads all accumulated lines in one batch).
 
 ## Installation / setup procedure
 
@@ -73,11 +60,13 @@ node setup.mjs
 It performs the mechanical parts of onboarding:
 
 1. Checks prerequisites — Node >= 18 and the `opencode` CLI on PATH.
-2. Creates `agents.json` from `agents.example.json` if missing (never overwrites an existing one).
-3. Installs the Agent Lobby rule (§8.1) into the user's global `AGENTS.md`
-   (`~/.config/opencode/AGENTS.md`) — idempotent: skips when the
-   `## 8.1 Agent Lobby` header is already present; creates the file if missing.
-   The exact section text lives in `agents-md-section.md` (single source of truth).
+2. Creates `agents.json` from `agents.example.json` if missing (never
+   overwrites an existing one).
+3. Installs the Agent Lobby rule into the user's global `AGENTS.md`
+   (`~/.config/opencode/AGENTS.md`) — idempotent: skips when a
+   `## Agent Lobby` heading variant is already present; creates the file if
+   missing. The exact section text lives in `agents-md-section.md`
+   (single source of truth).
 4. Verifies the local OpenCode service is reachable.
 
 It does **not** start the bridge, send messages, or touch anything beyond the
@@ -85,15 +74,6 @@ two config files and the global AGENTS.md.
 
 **After setup:** fill real session IDs into `agents.json`, then start the
 bridge with `node bridge.mjs`.
-
-## Running
-
-```sh
-node bridge.mjs
-```
-
-The bridge discovers the local OpenCode server URL at startup (`opencode
-service status`); `serverUrl` in `agents.json` is a fallback.
 
 ## Registering a project head
 
@@ -103,16 +83,38 @@ Edit `agents.json` (see `agents.example.json` for the shape):
 { "name": "taskflow", "project": "TaskFlow", "session": "ses_..." }
 ```
 
+The bridge hot-reloads the registry — no restart needed. Agents can do this
+for their human via the `registering-lobby-agents` skill.
+
+## Running
+
+```sh
+node bridge.mjs
+```
+
+The bridge discovers the local OpenCode server URL at startup
+(`opencode service status`); `serverUrl` in `agents.json` is a fallback.
+
+## For agents
+
+Participating agents follow the rules in **`PROTOCOL.md`** — identity
+prefixes, reply handling, and the token economy. Read it once when your
+session first engages with the lobby (the global `AGENTS.md` Agent Lobby
+section points here).
+
 ## Files
 
 | File | Purpose |
 |---|---|
-| `bridge.mjs` | Webhook + fan-out bridge (zero deps) |
+| `bridge.mjs` | Webhook + fan-out + event-listener bridge (zero deps) |
 | `agents.json` | Live registry (gitignored — contains session IDs) |
 | `agents.example.json` | Registry template |
-| `incoming_messages.txt` | Runtime inbox (gitignored) |
+| `incoming_messages.txt` | Runtime message log (gitignored) |
+| `agents-md-section.md` | Exact global-AGENTS.md section text |
+| `.placeholder/agent/coordinator.md` | Project-head coordinator template |
+| `.opencode/skills/registering-lobby-agents/` | Session registration skill |
 
 ## Not (yet) supported
 
-Agent-to-agent direct messaging, per-agent inbox files, delivery receipts,
-message history persistence.
+Agent-to-agent direct messaging, message history in a database (the log is a
+growing text file), delivery receipts, retries UI.
