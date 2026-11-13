@@ -94,14 +94,18 @@ bridge with `node bridge.mjs`.
 
 ## Registering a project head
 
-Edit `agents.json` (see `agents.example.json` for the shape):
+The `registering-lobby-agents` skill handles the full flow (agents can run it
+for their human): dedup check, coordinator provisioning (template copy, or
+append/align the Lobby section in an existing coordinator), one identity
+message telling the agent its registered name, session creation titled
+`(<name>)<project>`, and registry registration in `agents.json`:
 
 ```jsonc
 { "name": "taskflow", "project": "TaskFlow", "session": "ses_..." }
 ```
 
-The bridge hot-reloads the registry — no restart needed. Agents can do this
-for their human via the `registering-lobby-agents` skill.
+The bridge hot-reloads the registry — no restart needed. Manual registration
+(editing `agents.json` directly, shape above) still works for simple cases.
 
 ## Running
 
@@ -124,12 +128,15 @@ section points here).
 | File | Purpose |
 |---|---|
 | `bridge.mjs` | Webhook + fan-out + event-listener bridge (zero deps) |
+| `PROTOCOL.md` | Agent-facing rules (identity, replies, token economy) |
+| `AGENTS.md` | Boss-agent instructions (this project's sessions) |
 | `agents.json` | Live registry (gitignored - contains session IDs) |
 | `agents.example.json` | Registry template |
 | `incoming_messages.txt` | Runtime message log (gitignored) |
 | `.memory/boss/decision-log.md` | Boss decision record (committed, universal) |
 | `.memory/boss/local-context.md` | Machine-specific boss memory (gitignored) |
 | `.memory/boss/local-context.example.md` | Local-memory template |
+| `.memory/boss/decision-authority.md` | Decision-authority rule + escalation list (committed, public) |
 | `.placeholder/agents-md-section.md` | Exact global-AGENTS.md section text |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |
 | `.opencode/skills/registering-lobby-agents/` | Session registration skill |
