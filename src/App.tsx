@@ -22,7 +22,7 @@ export default function App() {
     view.kind === 'all'
       ? 'All projects'
       : view.kind === 'boss'
-        ? 'Boss — you → boss'
+        ? 'Boss'
         : view.kind === 'project'
           ? view.name
           : `${view.name} — ${agents.find((a) => a.name === view.name)?.project ?? ''}`;
@@ -34,6 +34,8 @@ export default function App() {
         msgs={msgs}
         view={view}
         expanded={expanded}
+        theme={theme}
+        onTheme={selectTheme}
         onToggleExpand={(p) =>
           setExpanded((prev) => {
             const next = new Set(prev);
@@ -50,11 +52,15 @@ export default function App() {
         }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between bg-gray-100 px-3 py-2 dark:bg-[#161616]">
-          <span className="text-xs text-gray-500">{title}</span>
-          <ThemeToggle theme={theme} onSelect={selectTheme} />
+        <div className="flex items-center bg-gray-100 px-3 py-2 dark:bg-[#161616]">
+          <span className="text-xs font-bold text-gray-900 dark:text-white">
+            {title}
+          </span>
         </div>
-        <ChatFeed msgs={msgs.filter((m) => isVisible(m, view, agents))} />
+        <ChatFeed
+          msgs={msgs.filter((m) => isVisible(m, view, agents))}
+          flip={view.kind === 'boss'}
+        />
         <Composer
           key={`${view.kind}:${'name' in view ? view.name : ''}`}
           agents={agents}

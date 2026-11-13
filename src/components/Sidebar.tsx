@@ -1,10 +1,14 @@
 import { Agent, Message, View, hh, projectGroups } from '../data/api';
+import { ThemeToggle } from './ThemeToggle';
+import { Theme } from '../hooks/useTheme';
 
 interface Props {
   agents: Agent[];
   msgs: Message[];
   view: View;
   expanded: Set<string>;
+  theme: Theme;
+  onTheme: (t: Theme) => void;
   onToggleExpand: (project: string) => void;
   onSelect: (view: View, el: HTMLElement) => void;
 }
@@ -14,6 +18,8 @@ export function Sidebar({
   msgs,
   view,
   expanded,
+  theme,
+  onTheme,
   onToggleExpand,
   onSelect,
 }: Props) {
@@ -30,9 +36,12 @@ export function Sidebar({
 
   return (
     <div className="w-64 shrink-0 overflow-y-auto border-r border-gray-300 bg-gray-100 p-2.5 dark:border-gray-700 dark:bg-[#181818]">
-      <h1 className="mb-2.5 text-sm font-bold text-gray-900 dark:text-white">
-        Agents-Lobby
-      </h1>
+      <div className="mb-2.5 flex items-center justify-between">
+        <h1 className="text-sm font-bold text-gray-900 dark:text-white">
+          Agents-Lobby
+        </h1>
+        <ThemeToggle theme={theme} onSelect={onTheme} />
+      </div>
       <div
         onClick={(e) => onSelect({ kind: 'boss' }, e.currentTarget)}
         className={`row cursor-pointer rounded-md px-2 py-1.5 ${active({ kind: 'boss' })}`}
