@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { openStore } from "./store.mjs";
 
 const CONFIG_FILE = "./agents.json";
-const MESSAGE_FILE = "./incoming_messages.txt";
 const WEBHOOK_PORT = 3005;
 
 let config;
@@ -31,6 +31,14 @@ function discoverServerUrl() {
 
 const SERVER_URL = discoverServerUrl();
 console.log(`[Bridge] OpenCode server: ${SERVER_URL || "(not found)"}`);
+
+// Message store (store.mjs) — capture points write rows here.
+const store = await openStore();
+
+// Capture points write messages to the store instead of the log file;
+// incoming_messages.txt is archive-only from here on.
+const saveMessage = ({ from, to, body, sessionId = null }) =>
+  store.insert({ ts: new Date().toISOString(), from, to, body, sessionId });
 
 // Registry is re-read per request so agents added to agents.json are usable
 // without a bridge restart.
@@ -94,31 +102,32 @@ async function wakeBoss() {
       console.log("[Bridge] Boss wake already pending, skipping.");
       return;
     }
-    await prompt(config.boss.session, WAKE_PROMPT);
+    // Carry the unread slice inline: every captured message since the last
+    // wake, minus what the boss session already has natively (its own replies,
+    // and the human's prompts that arrived in-session). Empty slice → plain
+    // wake prompt (wake-without-messages).
+    const rows = store
+      .unread("boss")
+      .filter((r) => r.from !== "boss" && !(r.from === "human" && r.to === "boss"));
+    const text = rows.length
+      ? WAKE_PROMPT +
+        "\n\n" +
+        rows.map((r) => `[${r.time}] [from: ${r.from}] [to: ${r.to}] ${r.text}`).join("\n")
+      : WAKE_PROMPT;
+    await prompt(config.boss.session, text);
+    // Bookmark only through the captured slice: rows inserted during the
+    // enqueue await stay unread and surface in the next wake. Empty slice →
+    // no bookmark move (already at MAX; a no-arg markSeen here could swallow
+    // rows arriving during the await).
+    if (rows.length) store.markSeen("boss", rows[rows.length - 1].id);
+    // shortcut: coalesced messages arriving between enqueue and boss processing wait for the next agent-reply wake; upgrade when the server supports editing a pending inbox item
     console.log("[Bridge] Boss wake prompt enqueued.");
   } catch (err) {
     console.error("[Bridge] Wake failed:", err.message);
   }
 }
 
-async function appendMessage(entry) {
-  // Guarantee exactly one newline between entries, whatever the previous writer did.
-  let tail = "";
-  try {
-    const stat = await fs.stat(MESSAGE_FILE);
-    if (stat.size > 0) {
-      const fh = await fs.open(MESSAGE_FILE, "r");
-      const buf = Buffer.alloc(1);
-      await fh.read(buf, 0, 1, stat.size - 1);
-      await fh.close();
-      tail = buf.toString("utf8");
-    }
-  } catch {} // file missing → fresh start
-  const prefix = tail && tail !== "\n" ? "\n" : "";
-  await fs.appendFile(MESSAGE_FILE, prefix + entry, "utf8");
-}
-
-// Mirror session traffic into the log so the web UI sees the whole picture.
+// Mirror session traffic into the store so the web UI sees the whole picture.
 // Zero tokens: raw server event stream. Volatile by contract — reconnects
 // after drops; no replay, so brief bridge downtime loses events (v1).
 // Boss session: human input + my replies. Agent sessions: their session
@@ -155,27 +164,39 @@ async function listenEvents() {
         if (e.type === "session.inbox.enqueued") {
           const item = d.item || {};
           // Boss session only. Skip synthetic echoes (already logged by /send)
-          // and the bridge's own wake prompt — only genuine human input logs.
+          // and the bridge's own wake prompt (plain, or carrying the unread
+          // slice) — only genuine human input logs. A real message that merely
+          // begins with "[message received]" must still capture.
           if (
             isBoss &&
             item.type === "user" &&
             item.payload?.text &&
-            item.payload.text !== "[message received]"
+            item.payload.text !== WAKE_PROMPT &&
+            !item.payload.text.startsWith(WAKE_PROMPT + "\n\n")
           ) {
-            await appendMessage(
-              `[${new Date().toISOString()}] [from: human] [to: boss] ${item.payload.text}\n`,
-            );
+            await saveMessage({
+              from: "human",
+              to: "boss",
+              body: item.payload.text,
+              sessionId: d.sessionID ?? null,
+            });
           }
         } else if (e.type === "session.text.ended" && d.text) {
           if (isBoss) {
-            await appendMessage(
-              `[${new Date().toISOString()}] [from: boss] [to: human] ${d.text}\n`,
-            );
+            await saveMessage({
+              from: "boss",
+              to: "human",
+              body: d.text,
+              sessionId: d.sessionID ?? null,
+            });
           } else {
             const replyTo = lastPromptFrom.get(agentName) || "boss";
-            await appendMessage(
-              `[${new Date().toISOString()}] [from: ${agentName}] [to: ${replyTo}] ${d.text}\n`,
-            );
+            await saveMessage({
+              from: agentName,
+              to: replyTo,
+              body: d.text,
+              sessionId: d.sessionID ?? null,
+            });
             // An agent answered — wake the boss (coalesced, same as webhook).
             wakeBoss();
           }
@@ -231,23 +252,23 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && req.url === "/api/messages") {
-    const raw = await fs.readFile(MESSAGE_FILE, "utf8").catch(() => "");
-    const msgs = [];
-    for (const line of raw.split("\n")) {
-      const m = line.match(
-        /^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\] (?:\[from: ([^\]]+)\] )?(?:\[to: ([^\]]+)\] )?(.*)$/,
-      );
-      if (m)
-        msgs.push({
-          time: m[1],
-          from: m[2] || "unknown",
-          to: m[3] || null,
-          text: m[4],
-        });
-      else if (msgs.length && line) msgs[msgs.length - 1].text += "\n" + line;
+  if (
+    req.method === "GET" &&
+    new URL(req.url, "http://x").pathname === "/api/messages"
+  ) {
+    const { searchParams } = new URL(req.url, "http://x");
+    const view = searchParams.get("view") || "all";
+    const after = Number(searchParams.get("after")) || 0;
+    // Clamp: a negative SQLite LIMIT means "no limit" — never leak full history by accident.
+    const limit = Math.max(0, Number(searchParams.get("limit")) || 500);
+    let agents = [];
+    if (view.startsWith("project:")) {
+      const reg = await loadRegistry();
+      agents = reg.agents
+        .filter((a) => a.project === view.slice("project:".length))
+        .map((a) => a.name);
     }
-    json(200, msgs);
+    json(200, store.query({ view, after, limit, agents }));
     return;
   }
 
@@ -258,9 +279,14 @@ const server = http.createServer(async (req, res) => {
       const { from, message } = JSON.parse(body);
       const text = (message || "").trim();
       if (!text) return json(400, { error: "message is required" });
-      const tag = from ? ` [from: ${from}]` : "";
-      await appendMessage(`[${new Date().toISOString()}]${tag} ${text}\n`);
-      console.log(`[Webhook] Saved message${tag}: "${text}"`);
+      // No `to` on the webhook path (matches the old log line); UI fallback "unknown".
+      await saveMessage({
+        from: from || "unknown",
+        to: null,
+        body: text,
+        sessionId: null,
+      });
+      console.log(`[Webhook] Saved message${from ? ` [from: ${from}]` : ""}: "${text}"`);
       wakeBoss();
       json(200, { status: "ok" });
     } catch {
@@ -332,9 +358,12 @@ const server = http.createServer(async (req, res) => {
       if (skipped.length)
         console.error(`[Send] Failed for: ${skipped.join(", ")}`);
       if (sent.length) {
-        await appendMessage(
-          `[${new Date().toISOString()}] [from: ${sender}] [to: ${sent.join(", ")}] ${text}\n`,
-        );
+        await saveMessage({
+          from: sender,
+          to: sent.join(", "),
+          body: text,
+          sessionId: null,
+        });
       }
       console.log(
         `[Send] Boss message sent to: ${sent.join(", ") || "(none)"}`,

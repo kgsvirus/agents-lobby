@@ -1,8 +1,6 @@
 # Runtime data
 incoming_messages.txt
-
-# Runtime data
-incoming_messages.txt
+.data/
 
 # Local registry (contains session IDs; use agents.example.json as template)
 agents.json
