@@ -14,7 +14,9 @@
    action word: "make the changes", "build", "fix", "proceed", "do it".
 2. **Ambiguous messages get clarified** — "let's go back to this",
    "what about X" → restate the plan and ask "proceed?". Approval is
-   never inferred from an ambiguous message.
+   never inferred from an ambiguous message. A question about a change
+   ("should this also change X?") seeks the boss's judgment, not
+   permission — answer it, then wait for the explicit go.
 3. **Draft-first when asked** — "draft it", "show me", "let me see" →
    the artifact is a draft (separate file or chat proposal); live-file
    edits wait for approval.
@@ -42,3 +44,9 @@
 - 2026-11-13 — README/PROTOCOL changes made and committed on an
   exploratory ask ("check if there's something we can change").
   Lesson: exploratory asks produce proposals, then stop. (Gates 1, 4)
+- 2026-11-14 — Human's global AGENTS.md edited after they *asked*
+  "should that change be in my global too?" — a judgment question was
+  treated as approval. One-line change, reported honestly, human
+  informed of revert option. Lesson: questions about a change are not
+  change approvals — especially for the human's personal files outside
+  the repo. (Gate 2)
