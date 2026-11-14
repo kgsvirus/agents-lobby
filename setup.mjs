@@ -48,6 +48,16 @@ try {
   report.push(`DONE created ${LOCAL_CONTEXT} from ${LOCAL_CONTEXT_EXAMPLE}`);
 }
 
+// 2c. Projects folder (machine-local, gitignored - holds the human's
+// project workspaces, each with its own git repo)
+try {
+  await fs.access('./projects');
+  report.push('OK   ./projects exists, left untouched');
+} catch {
+  await fs.mkdir('./projects', { recursive: true });
+  report.push('DONE created ./projects (gitignored - place project workspaces here)');
+}
+
 // 3. Global AGENTS.md: install section 8.1 idempotently
 const section = await fs.readFile(SECTION_FILE, 'utf8');
 let agentsMd;

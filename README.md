@@ -136,6 +136,7 @@ section points here).
 | `.memory/boss/decision-log.md` | Boss decision record (committed, universal) |
 | `.memory/boss/local-context.md` | Machine-specific boss memory (gitignored) |
 | `.memory/boss/local-context.example.md` | Local-memory template |
+| `projects/` | Machine-local project workspaces (gitignored; created by setup) |
 | `.memory/boss/decision-authority.md` | Decision-authority rule + escalation list (committed, public) |
 | `.placeholder/agents-md-section.md` | Exact global-AGENTS.md section text |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |

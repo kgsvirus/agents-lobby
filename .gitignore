@@ -11,6 +11,10 @@ agents.json
 .memory/boss/local-context.md
 .memory/boss/amnesia.md
 
+# Machine-local project workspaces (moved into the lobby by the human;
+# each holds its own git repo - created by setup.mjs)
+projects/
+
 # OS junk
 Thumbs.db
 desktop.ini
