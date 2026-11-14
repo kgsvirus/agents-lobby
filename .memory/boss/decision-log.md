@@ -60,8 +60,8 @@
   right, others left) with label above bubble; picker scoped per view;
   Dark/Light theme (system default, persisted, WCAG AA contrast).
 - **Commit format:** `feat|fix (v1): <summary>`; push is human-only; commit
-  and send gates — see `behavior.md`. Releases: annotated tag after
-  version bump.
+  gate, commit batching, and send gate — see `behavior.md`. Releases:
+  annotated tag after version bump.
 - **Onboarding:** `node setup.mjs` (idempotent, heading-variant-matching
   global-AGENTS.md install); `registering-lobby-agents` skill for new agents.
 

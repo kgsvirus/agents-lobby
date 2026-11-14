@@ -69,6 +69,8 @@ log: `.memory/boss/behavior.md`):
   draft; live-file edits wait for approval.
 - **Commit gate** — no commit without the word "commit" (or explicit
   approval) in your latest instruction.
+- **Commit batching** — multi-scope pending changes commit separately,
+  one commit per scope (`feat|fix|docs|chore (v1): <summary>`).
 - **Send gate** — no agent messages without explicit approval.
 
 ## Relay rule

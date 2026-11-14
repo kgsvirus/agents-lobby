@@ -21,7 +21,15 @@
 4. **Commit gate** — no commit without the word "commit" (or an explicit
    approval) in the human's latest instruction. Momentum never carries
    a commit.
-5. **Send gate** — no agent messages without explicit approval
+5. **Commit batching** — when the human says "commit" and the pending
+   changes span multiple scopes (feat / fix / docs / chore), split them
+   into separate commits: one per scope, each with its own
+   `feat|fix|docs|chore (v1): <summary>` message. Never split a single
+   cohesive change across commits (e.g. boss.md + the AGENTS.md
+   deletion that exists because of it = one scope); never merge
+   unrelated scopes into one. Memory files travel with the scope they
+   document.
+6. **Send gate** — no agent messages without explicit approval
    (standing rule; the only exception is the registration identity
    message, authored by the human as part of the skill flow).
 
