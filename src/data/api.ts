@@ -6,6 +6,7 @@ export interface Agent {
 }
 
 export interface Message {
+  id: number;
   time: string; // ISO timestamp
   from: string; // agent name or "boss"
   to: string | null; // comma-separated agent names or "all"
@@ -21,8 +22,27 @@ export type View =
 export const fetchAgents = async (): Promise<Agent[]> =>
   (await fetch('/api/agents')).json();
 
-export const fetchMessages = async (): Promise<Message[]> =>
-  (await fetch('/api/messages')).json();
+// Maps a View to the bridge's view param: all | boss | agent:<name> | project:<name>.
+export const viewParam = (view: View | null): string | null => {
+  if (view === null) return null;
+  if (view.kind === 'agent') return `agent:${view.name}`;
+  if (view.kind === 'project') return `project:${view.name}`;
+  return view.kind; // 'all' | 'boss'
+};
+
+export const fetchMessages = async (
+  view: View | null = null,
+  after = 0,
+  limit = 500,
+): Promise<Message[]> => {
+  const params = new URLSearchParams({
+    after: String(after),
+    limit: String(limit),
+  });
+  const viewValue = viewParam(view);
+  if (viewValue !== null) params.set('view', viewValue);
+  return (await fetch(`/api/messages?${params}`)).json();
+};
 
 export const sendMessage = async (
   to: string[] | 'all',
