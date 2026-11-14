@@ -173,18 +173,38 @@
   per instruction file); subagents in this directory no longer inherit
   boss rules. The human switches sessions to the Boss agent manually.
   — approved
+- **D23** Message database (implements O01): replace the append-only text log
+  with SQLite (`node:sqlite`, zero deps) at `.data/messages.db` (gitignored);
+  schema `messages(id, ts, from, to, body, session_id)` + `bookmarks(consumer,
+  last_seen_id)`. Bridge writes every captured event; `incoming_messages.txt`
+  retires as read-only pre-db archive; **clean start** (db begins empty,
+  human decided). Reads: dashboard `GET /api/messages?view=all|boss|
+  agent:<name>&after=<id>&limit=` — sidebar views become filtered queries
+  mirroring D11 (only the `api.ts` data layer changes); boss wake = bridge
+  composes the unread slice inline in the wake prompt (pure script, zero
+  tokens for filtering) and advances the bookmark on delivery. Non-goals
+  v1: no full-text search, no session transcripts (OpenCode's db owns
+  those), no pruning. — approved
 
 ## Open items (system-level)
 
-- **O01** Database storage for messages (planned phase; the log is a growing
-  text file read fully per wake).
+- **O01** Database storage for messages — **CLOSED 2026-11-14, shipped as D23**
+  (store live: dashboard queries slices, wake carries the unread slice).
+  Deferred minors: empty-project-view broadcast fallback; labeled test-residue
+  rows in the runtime db (left as history); pre-existing `/ui` HEAD 404
+  (GET-only handler); browser-only visual checks; coalescing branch
+  unverified without a live browser. Also closed today: the stale AGENTS.md
+  wake-trigger wording (file-era) is superseded — boss.md wake trigger reads
+  the inline slice below the marker (edit applied to boss.md, untracked-
+  file update rides with the next boss.md-touching commit).
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
   typing into agent sessions is invisible in the log; only their replies are
   captured). Accepted v1 gap; extension = zero-token fix if wanted.
 - **O03** Possible duplicate delivery in the prompt API (one send produced
   two log lines once). Unconfirmed; watch.
 - **O07** Boss `AGENTS.md` slimming to a `PROTOCOL.md`/decision-log pointer —
-  decision open.
+  CLOSED 2026-11-14: superseded by D22 (boss agent definition; AGENTS.md
+  retired).
 - **O08** Agent-to-agent direct messaging — out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.

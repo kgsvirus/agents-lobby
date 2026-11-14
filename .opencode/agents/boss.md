@@ -37,7 +37,7 @@ Five files under `.memory/boss/` in this repo. After compaction or at session st
 
 ## Wake trigger
 
-`[message received]` means new messages were appended to `./incoming_messages.txt`. Read the latest lines at the bottom of the file and respond.
+`[message received]` means new lobby messages arrived. The unread slice rides below the marker in the wake prompt itself — read it and respond; no file or database read is needed.
 
 ## Sending identity
 

@@ -40,7 +40,8 @@ Full setup details in the "Installation / setup procedure" section below.
 ## How it works
 
 ```
-project head ──event stream──▶ bridge (:3005) ──▶ incoming_messages.txt ──▶ boss
+project head ⟶event stream⟶ bridge (:3005) ⟶ .data/messages.db (SQLite store)
+                                    ⟵⟶ dashboard /ui (filtered queries) & boss wake (unread slice)
 boss ──/send──▶ bridge ──▶ OpenCode prompt API ──▶ project head session(s)
 human ──webchat (Boss row)──▶ /prompt ──▶ boss session
 human ──webchat (agent/project row)──▶ /send ──▶ project head (as Human:)
@@ -132,7 +133,8 @@ section points here).
 | `.opencode/agents/boss.md` | Boss-agent instructions (this project's sessions) |
 | `agents.json` | Live registry (gitignored - contains session IDs) |
 | `agents.example.json` | Registry template |
-| `incoming_messages.txt` | Runtime message log (gitignored) |
+| `.data/messages.db` | Runtime message store (gitignored) |
+| `incoming_messages.txt` | Pre-db message log archive (gitignored) |
 | `.memory/boss/decision-log.md` | Boss decision record (committed, universal) |
 | `.memory/boss/local-context.md` | Machine-specific boss memory (gitignored) |
 | `.memory/boss/local-context.example.md` | Local-memory template |
@@ -144,5 +146,4 @@ section points here).
 
 ## Not (yet) supported
 
-Agent-to-agent direct messaging, message history in a database (the log is a
-growing text file), delivery receipts, retries UI.
+Agent-to-agent direct messaging, delivery receipts, retries UI.
