@@ -127,9 +127,12 @@
   — machine state: registry, delegate rulings, local open items; seeded from
   `local-context.example.md`), **`decision-authority.md`** (committed —
   public mirror of the decision-authority rule + escalation list; machine
-  rulings live in local-context), and **`behavior.md`** (committed —
-  behavior gates + corrections log). Boss `AGENTS.md` points to all four.
-  — approved (current, D20/D21)
+  rulings live in local-context), **`behavior.md`** (committed —
+  behavior gates + corrections log), and **`amnesia.md`** (gitignored —
+  archive of removed memory, explicit-ask-only; described in the boss
+  agent definition so fresh clones know it should exist). Boss agent
+  definition (`.opencode/agents/boss.md`) points to all five.
+  — approved (current, D20/D21/D22)
 - **D20** Public decision-authority file (`.memory/boss/decision-authority.md`):
   the delegation rule + escalation list, published for any human running
   this boss agent; machine-specific rulings stay in `local-context.md`

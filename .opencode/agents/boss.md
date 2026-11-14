@@ -33,7 +33,7 @@ Five files under `.memory/boss/` in this repo. After compaction or at session st
 - **`local-context.md`** (gitignored, this machine) — registered agents, project paths, delegate rulings on local projects, local open items. Update after local changes: registrations, delegated rulings, sync state.
 - **`decision-authority.md`** (committed) — the delegation rule + escalation list, public for any human running this boss agent. Read it when delegation starts or when unsure.
 - **`behavior.md`** (committed) — the behavior gates (how I act on your messages) + the corrections log that produced them. Always in effect.
-- **`amnesia.md`** (gitignored) — the archive of REMOVED memory. The boss must not read or cite it unless the human explicitly asks.
+- **`amnesia.md`** (gitignored, personal archive) — removed memory is archived here instead of deleted, so nothing is truly lost; **NOT part of session context**: the boss must not read or cite it unless the human explicitly asks. When a decision/memory is removed from the active files, move its entry here (dated, with the removal reason).
 
 ## Wake trigger
 
