@@ -17,8 +17,8 @@ Full human-facing documentation lives in `README.md`.
   message.
 - Do **not** POST replies to any webhook. The webhook endpoint exists only for
   backward compatibility.
-- Multiple text blocks in one turn are captured as multiple log lines — that is
-  fine; the boss reads them together.
+- Multiple text blocks in one turn are captured as multiple store rows — that is
+  fine; the boss wake carries them together (inline, unread slice).
 
 ## Token economy (mandatory)
 

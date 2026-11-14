@@ -182,9 +182,13 @@
   agent:<name>&after=<id>&limit=` — sidebar views become filtered queries
   mirroring D11 (only the `api.ts` data layer changes); boss wake = bridge
   composes the unread slice inline in the wake prompt (pure script, zero
-  tokens for filtering) and advances the bookmark on delivery. Non-goals
-  v1: no full-text search, no session transcripts (OpenCode's db owns
-  those), no pruning. — approved
+  tokens for filtering) and advances the bookmark on delivery. **Amendment
+  (2026-11-14, human-approved):** the wake slice excludes what the boss
+  session already has natively — its own replies (`from: boss`) and the
+  human's in-session prompts (`from: human, to: boss`); agent traffic and
+  the human's direct sends to agents still ride; bookmark advances through
+  all rows. Non-goals v1: no full-text search, no session transcripts
+  (OpenCode's db owns those), no pruning. - approved
 
 ## Open items (system-level)
 
@@ -193,10 +197,9 @@
   Deferred minors: empty-project-view broadcast fallback; labeled test-residue
   rows in the runtime db (left as history); pre-existing `/ui` HEAD 404
   (GET-only handler); browser-only visual checks; coalescing branch
-  unverified without a live browser. Also closed today: the stale AGENTS.md
-  wake-trigger wording (file-era) is superseded — boss.md wake trigger reads
-  the inline slice below the marker (edit applied to boss.md, untracked-
-  file update rides with the next boss.md-touching commit).
+  unverified without a live browser. Also closed today: the stale file-era
+  wake-trigger wording — boss.md now reads the inline slice below the marker
+  (committed `77189c5`).
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
   typing into agent sessions is invisible in the log; only their replies are
   captured). Accepted v1 gap; extension = zero-token fix if wanted.
