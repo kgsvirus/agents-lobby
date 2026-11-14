@@ -35,7 +35,8 @@ Full human-facing documentation lives in `README.md`.
 
 The boss agent has its own rule set — approval gate, sending identity
 (`Boss:`/`Human:` prefixes on delivered prompts), wake trigger, and relay
-rule — maintained in the boss's `AGENTS.md` in the Agents-Lobby repo.
+rule — maintained in the boss's agent definition
+(`.opencode/agents/boss.md` in the Agents-Lobby repo).
 Project heads don't act on those rules; they only see their effects (the
 `Boss:`/`Human:` prefixes on received prompts and the compact relays the
 boss sends back).

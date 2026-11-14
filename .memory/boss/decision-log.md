@@ -162,6 +162,14 @@
   its own coordinator.md so no template copy reached it). Identity tell sent
   to ruben; TaskFlow's existing coordinator.md got the lobby section
   appended. — approved
+- **D22** Boss agent definition (extends D13a): the boss is now a defined
+  agent — `.opencode/agents/boss.md` (frontmatter: description, mode,
+  model pin glm-5.3-flash, permissions mirroring build's with browser
+  denied; body: the former AGENTS.md boss content). Project `AGENTS.md`
+  retired — boss behavior lives only in the agent definition (one audience
+  per instruction file); subagents in this directory no longer inherit
+  boss rules. The human switches sessions to the Boss agent manually.
+  — approved
 
 ## Open items (system-level)
 
