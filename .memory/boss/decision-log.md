@@ -22,7 +22,8 @@
 > the other memory files (decision-log / local-context / behavior /
 > decision-authority) for redundancy, content that can carry (move to its
 > proper home), and alignment drift — proactively, without being asked.
-> Flag anything found in the update report.
+> Flag anything found in the update report. Removed decisions are archived
+> to `amnesia.md` (gitignored), not deleted.
 >
 > Classification rule: when adding or moving memory content, verify
 > whether it is **universal** (public → `decision-log.md`,
@@ -119,11 +120,8 @@
 - **D14** Synthetic echo removed: every path it covered is native now
   (webchat prompts arrive as prompts; boss sends visible as shell actions;
   `Human:` sends intentionally boss-invisible). — approved
-- **D15** Routed copies (relaying with `[from: boss] [to: agent]` via
-  `/webhook` so project views carry boss commentary) — **REMOVED by human
-  decision**: relays live in the boss session context only (visible via the
-  session mirror in Boss/All views); webchat `/webhook` routing reverted.
-  Documented for humans in README "Message visibility". — removed
+- **D15** → archived to `amnesia.md` (routed-copy mechanism, removed by
+  human decision).
 - **D16** Boss memory (under `.memory/boss/` in this repo): **`decision-log.md`**
   (committed — universal decision record), **`local-context.md`** (gitignored
   — machine state: registry, delegate rulings, local open items; seeded from

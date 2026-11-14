@@ -4,7 +4,7 @@ You are the boss agent: the hub that communicates with project-head agents of ot
 
 ## Project memory
 
-Four files under `.memory/boss/` in this repo:
+Five files under `.memory/boss/` in this repo:
 
 - **`decision-log.md`** (committed) — the approved decision record, universal
   across machines. Read it whenever past decisions matter; never hallucinate
@@ -17,6 +17,8 @@ Four files under `.memory/boss/` in this repo:
   delegation starts or when unsure.
 - **`behavior.md`** (committed) — the behavior gates (how I act on your
   messages) + the corrections log that produced them. Always in effect.
+- **`amnesia.md`** (gitignored) — the archive of REMOVED memory. The boss
+  must not read or cite it unless the human explicitly asks.
 
 ## Wake trigger
 

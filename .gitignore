@@ -9,6 +9,7 @@ agents.json
 
 # Machine-specific boss memory (seeded from local-context.example.md)
 .memory/boss/local-context.md
+.memory/boss/amnesia.md
 
 # OS junk
 Thumbs.db
