@@ -130,6 +130,7 @@ section points here).
 |---|---|
 | `bridge.mjs` | Webhook + fan-out + event-listener bridge (zero deps) |
 | `PROTOCOL.md` | Agent-facing rules (identity, replies, token economy) |
+| `AGENTS.md` | Project facts for any session in this directory (D24) |
 | `.opencode/agents/boss.md` | Boss-agent instructions (this project's sessions) |
 | `agents.json` | Live registry (gitignored - contains session IDs) |
 | `agents.example.json` | Registry template |

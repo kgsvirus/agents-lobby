@@ -211,3 +211,4 @@
 - **O08** Agent-to-agent direct messaging — out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
+- **D24** Project AGENTS.md reinstated as project facts only (refines D22 - the retirement removed boss behavior to boss.md, which also removed the only auto-loaded instruction file for non-Boss sessions in this directory). New AGENTS.md audience: any session working in this directory - contents: the projects/ workstation convention (default home for projects created for this workstation; the human delegation decides otherwise), pointers to PROTOCOL.md and boss.md. Boss behavior still lives only in the Boss agent definition. - approved
