@@ -21,9 +21,11 @@
 > Memory-maintenance rule: whenever memory is updated, always cross-check
 > the other memory files (decision-log / local-context / behavior /
 > decision-authority) for redundancy, content that can carry (move to its
-> proper home), and alignment drift — proactively, without being asked.
-> Flag anything found in the update report. Removed decisions are archived
-> to `amnesia.md` (gitignored), not deleted.
+> proper home), and alignment drift — including form: a rule set should
+> read as one system (parallel labels, consistent structure), not seven
+> individual drafts. Proactively, without being asked. Flag anything
+> found in the update report. Removed decisions are archived to
+> `amnesia.md` (gitignored), not deleted.
 >
 > Classification rule: when adding or moving memory content, verify
 > whether it is **universal** (public → `decision-log.md`,
@@ -37,6 +39,31 @@
 > `PROTOCOL.md` (agents) — and the boss `AGENTS.md` — for content that
 > needs updating or alignment per D13a. Proactively, without being asked;
 > flag anything found in the update report.
+>
+> Circularity rule: when checking memory (and instructions), also look
+> for circular instructions/rules — rules that reference each other in a
+> loop, exist only to serve each other, or whose revision would
+> invalidate one another. Flag such loops to the human with a proposed
+> cut (which rule to revise or remove). Healthy pointer chains are fine:
+> each hop must carry unique substance and the chain must terminate on
+> real content. The purpose is unambiguous instruction-following: any
+> agent (or the boss) hitting these rules must never have to guess which
+> instruction wins.
+>
+> Necessity rule: when checking memory, also ask of each entry: "would
+> the project still progress without this knowledge?" If yes, the entry
+> is history, not substance — propose trimming it to its protective
+> minimum (the part that guards against re-litigating a settled
+> decision) or removing it. Records whose only job is "why we don't do
+> X again" survive in one line, not a narrative.
+>
+> Memory-change consent rule: removing memory (moving it to `amnesia.md`)
+> always asks the human first — removal is never autonomous. Substantive
+> memory changes (new rules, revised rules, new decisions) are drafted in
+> chat and applied only on approval. The exception is mechanical
+> status-sync — marking items closed after the human's instruction,
+> syncing wording to already-approved decisions — which is applied
+> proactively per the memory-maintenance rule and reported in the update.
 >
 > Last updated: 2026-11-14 (vision recorded).
 
@@ -60,8 +87,9 @@
   right, others left) with label above bubble; picker scoped per view;
   Dark/Light theme (system default, persisted, WCAG AA contrast).
 - **Commit format:** `feat|fix (v1): <summary>`; push is human-only; commit
-  gate, commit batching, and send gate — see `behavior.md`. Releases:
-  annotated tag after version bump.
+  gate (only the word "commit" commits; "approve" applies without
+  committing), commit batching, and send gate — see `behavior.md`.
+  Releases: annotated tag after version bump.
 - **Onboarding:** `node setup.mjs` (idempotent, heading-variant-matching
   global-AGENTS.md install); `registering-lobby-agents` skill for new agents.
 
@@ -165,14 +193,13 @@
   its own coordinator.md so no template copy reached it). Identity tell sent
   to ruben; TaskFlow's existing coordinator.md got the lobby section
   appended. — approved
-- **D22** Boss agent definition (extends D13a): the boss is now a defined
-  agent — `.opencode/agents/boss.md` (frontmatter: description, mode,
-  model pin glm-5.3-flash, permissions mirroring build's with browser
-  denied; body: the former AGENTS.md boss content). Project `AGENTS.md`
-  retired — boss behavior lives only in the agent definition (one audience
-  per instruction file); subagents in this directory no longer inherit
-  boss rules. The human switches sessions to the Boss agent manually.
-  — approved
+- **D22** Boss agent definition (extends D13a): the boss is a defined agent
+  — `.opencode/agents/boss.md` (frontmatter: description, mode, model pin
+  glm-5.3-flash, permissions mirroring build's with browser denied). Boss
+  behavior lives only in the agent definition (one audience per
+  instruction file); subagents in this directory never inherit boss rules.
+  The human switches sessions to the Boss agent manually. (AGENTS.md:
+  retired, later reinstated project-facts-only per D24.) — approved
 - **D23** Message database (implements O01): replace the append-only text log
   with SQLite (`node:sqlite`, zero deps) at `.data/messages.db` (gitignored);
   schema `messages(id, ts, from, to, body, session_id)` + `bookmarks(consumer,
@@ -189,6 +216,15 @@
   the human's direct sends to agents still ride; bookmark advances through
   all rows. Non-goals v1: no full-text search, no session transcripts
   (OpenCode's db owns those), no pruning. - approved
+
+- **D24** Project `AGENTS.md` reinstated as **project facts only** (refines
+  D22 — the retirement removed boss *behavior* to `boss.md`, which also
+  removed the only auto-loaded instruction file for non-Boss sessions in
+  this directory). New `AGENTS.md` audience: "any session working in this
+  directory" — contents: the projects/ workstation convention (default
+  home for projects created for this workstation; the human's delegation
+  decides otherwise), pointers to `PROTOCOL.md` and `boss.md`. Boss
+  behavior still lives only in the Boss agent definition. — approved
 
 ## Open items (system-level)
 
@@ -211,4 +247,3 @@
 - **O08** Agent-to-agent direct messaging — out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
-- **D24** Project AGENTS.md reinstated as project facts only (refines D22 - the retirement removed boss behavior to boss.md, which also removed the only auto-loaded instruction file for non-Boss sessions in this directory). New AGENTS.md audience: any session working in this directory - contents: the projects/ workstation convention (default home for projects created for this workstation; the human delegation decides otherwise), pointers to PROTOCOL.md and boss.md. Boss behavior still lives only in the Boss agent definition. - approved
