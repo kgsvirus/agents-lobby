@@ -143,7 +143,17 @@ section points here).
 | `.memory/boss/decision-authority.md` | Decision-authority rule + escalation list (committed, public) |
 | `.placeholder/agents-md-section.md` | Exact global-AGENTS.md section text |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |
-| `.opencode/skills/registering-lobby-agents/` | Session registration skill |
+| `.opencode/skills/` | Lobby skills — see **Skills** below |
+
+## Skills
+
+Skills are lobby capabilities an agent session can invoke. They live in
+`.opencode/skills/` and grow over time — categorize this list when it
+exceeds ~5 entries.
+
+| Skill | Purpose |
+|---|---|
+| `registering-lobby-agents` | Register a project-head session into the lobby (dedup check → name → provision → register → report) |
 
 ## Not (yet) supported
 
