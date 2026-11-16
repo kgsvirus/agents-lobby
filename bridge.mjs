@@ -230,8 +230,17 @@ const server = http.createServer(async (req, res) => {
     };
     try {
       const data = await fs.readFile(`./dist/${rel.replace(/\.\./g, "")}`);
+      // Hashed assets are content-addressed → cache forever; HTML must
+      // revalidate on every load so a new deploy never serves stale HTML
+      // that references old (pruned) asset hashes.
+      const cacheControl = path.extname(rel) === ".html"
+        ? "no-cache"
+        : rel.startsWith("assets/")
+          ? "public, max-age=31536000, immutable"
+          : undefined;
       res.writeHead(200, {
         "Content-Type": types[path.extname(rel)] || "application/octet-stream",
+        ...(cacheControl ? { "Cache-Control": cacheControl } : {}),
       });
       res.end(data);
     } catch {
@@ -259,8 +268,9 @@ const server = http.createServer(async (req, res) => {
     const { searchParams } = new URL(req.url, "http://x");
     const view = searchParams.get("view") || "all";
     const after = Number(searchParams.get("after")) || 0;
+    const before = Number(searchParams.get("before")) || 0;
     // Clamp: a negative SQLite LIMIT means "no limit" — never leak full history by accident.
-    const limit = Math.max(0, Number(searchParams.get("limit")) || 500);
+    const limit = Math.max(0, Number(searchParams.get("limit")) || 10);
     let agents = [];
     if (view.startsWith("project:")) {
       const reg = await loadRegistry();
@@ -268,7 +278,45 @@ const server = http.createServer(async (req, res) => {
         .filter((a) => a.project === view.slice("project:".length))
         .map((a) => a.name);
     }
-    json(200, store.query({ view, after, limit, agents }));
+    const { rows, hasMore } = store.query({ view, after, before, limit, agents });
+    json(200, { messages: rows, hasMore });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/last-activity") {
+    // Store-backed last-activity stamps: { all, boss, "agent:<name>" } → ts.
+    // Project views aggregate their agents client-side.
+    const reg = await loadRegistry();
+    json(200, store.lastActivity(reg.agents.map((a) => a.name)));
+    return;
+  }
+
+  // SSE: push every new message row to connected dashboards the moment
+  // it lands in the store (replaces the 5s dashboard poll).
+  if (
+    req.method === "GET" &&
+    new URL(req.url, "http://x").pathname === "/api/stream"
+  ) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    res.write(": connected\n\n");
+    const off = store.onInsert((row) => {
+      try {
+        res.write(`data: ${JSON.stringify(row)}\n\n`);
+      } catch {}
+    });
+    const hb = setInterval(() => {
+      try {
+        res.write(": hb\n\n");
+      } catch {}
+    }, 25000);
+    res.on("close", () => {
+      off();
+      clearInterval(hb);
+    });
     return;
   }
 

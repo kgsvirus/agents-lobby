@@ -27,6 +27,7 @@ export function openStore(file = './.data/messages.db') {
   const insertStmt = db.prepare(
     'INSERT INTO messages (ts, sender, receiver, body, session_id) VALUES (?, ?, ?, ?, ?)',
   );
+  const rowByIdStmt = db.prepare(`SELECT ${ROW_COLS} FROM messages WHERE id = ?`);
   const maxIdStmt = db.prepare('SELECT MAX(id) AS m FROM messages');
   const bookmarkStmt = db.prepare('SELECT last_seen_id FROM bookmarks WHERE consumer = ?');
   const upsertBookmarkStmt = db.prepare(
@@ -34,15 +35,30 @@ export function openStore(file = './.data/messages.db') {
      ON CONFLICT(consumer) DO UPDATE SET last_seen_id = excluded.last_seen_id`,
   );
 
+  // SSE subscribers: notified with the full wire row on every insert.
+  const insertSubscribers = new Set();
+
   function insert({ ts, from, to, body, sessionId = null }) {
     const r = insertStmt.run(ts, from, to, body, sessionId);
+    const row = rowByIdStmt.get(Number(r.lastInsertRowid));
+    for (const cb of insertSubscribers) cb(row);
     return { id: Number(r.lastInsertRowid) };
   }
 
-  function query({ view = 'all', after = 0, limit = 500, agents = [] } = {}) {
+  function onInsert(cb) {
+    insertSubscribers.add(cb);
+    return () => insertSubscribers.delete(cb);
+  }
+
+  function query({ view = 'all', after = 0, before = 0, limit = 500, agents = [] } = {}) {
     const conds = [];
     const params = [];
-    if (after > 0) {
+    let descending = false;
+    if (before > 0) {
+      conds.push('id < ?');
+      params.push(before);
+      descending = true; // older-page: fetch newest-first, then reverse
+    } else if (after > 0) {
       conds.push('id > ?');
       params.push(after);
     }
@@ -62,13 +78,17 @@ export function openStore(file = './.data/messages.db') {
       conds.push(`(${parts.join(' OR ')})`);
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-    // after = 0 → latest N rows, returned ascending: take DESC then reverse in JS.
-    const order = after > 0 ? 'ORDER BY id ASC' : 'ORDER BY id DESC';
+    // before/initial: DESC to find hasMore cheaply (fetch limit+1); after>0: ASC.
+    const order = after > 0 && !descending ? 'ORDER BY id ASC' : 'ORDER BY id DESC';
     let rows = db
       .prepare(`SELECT ${ROW_COLS} FROM messages ${where} ${order} LIMIT ?`)
-      .all(...params, limit);
-    if (after === 0) rows = rows.reverse();
-    return rows;
+      .all(...params, limit + 1);
+    // hasMore = an extra row exists in the fetch direction (upward: older
+    // remain; catch-up: newer remain — the UI keeps refetching until false).
+    const hasMore = rows.length > limit;
+    if (hasMore) rows = rows.slice(0, limit);
+    if (descending || after === 0) rows = rows.reverse();
+    return { rows, hasMore };
   }
 
   function unread(consumer = 'boss') {
@@ -78,20 +98,44 @@ export function openStore(file = './.data/messages.db') {
       .all(b ? b.last_seen_id : 0);
   }
 
-  // throughId: bookmark through this row instead of MAX(id) — lets callers
-  // snapshot a slice and never swallow rows inserted after it.
   function markSeen(consumer = 'boss', throughId) {
     let id = throughId;
     if (id === undefined) {
       const row = maxIdStmt.get();
-      id = row && row.m !== null ? row.m : undefined; // no-op on empty table
+      id = row && row.m !== null ? row.m : null;
     }
-    if (id !== undefined) upsertBookmarkStmt.run(consumer, id);
+    if (id !== null) upsertBookmarkStmt.run(consumer, id); // no-op on empty table
+  }
+
+  // Latest message ts per view channel (F6 r2): no MAX(ts) full scans. Each
+  // membership disjunct becomes a top-1 `ORDER BY id DESC LIMIT 1` on an
+  // existing index (idx_msg_sender / idx_msg_receiver / rowid PK) — ts is
+  // assigned at insert, so id order == ts order — combined via max(). The
+  // list-LIKE disjunct is a rowid-desc scan with early exit (no usable index).
+  // No schema migration; '' (empty table) maps to null. Still one statement.
+  function lastActivity(agents = []) {
+    const LIST = `(',' || REPLACE(receiver, ' ', '') || ',') LIKE '%,' || ? || ',%'`;
+    const top = (cond) =>
+      `ifnull((SELECT ts FROM messages WHERE ${cond} ORDER BY id DESC LIMIT 1), '')`;
+    const sql = [
+      `SELECT 'all' AS view, ifnull((SELECT ts FROM messages ORDER BY id DESC LIMIT 1), '') AS ts`,
+      `SELECT 'boss' AS view, max(${top(`sender = 'boss'`)}, ${top(`receiver = 'boss'`)}) AS ts`,
+      ...agents.map(
+        (n) =>
+          `SELECT 'agent:${n}' AS view, max(${top(`sender = ?`)}, ${top(
+            `receiver = 'all'`,
+          )}, ${top(`receiver = ?`)}, ${top(LIST)}) AS ts`,
+      ),
+    ].join(' UNION ALL ');
+    const params = agents.flatMap((n) => [n, n, n]);
+    const out = {};
+    for (const r of db.prepare(sql).all(...params)) out[r.view] = r.ts === '' ? null : r.ts;
+    return out;
   }
 
   function close() {
     db.close();
   }
 
-  return { insert, query, unread, markSeen, close };
+  return { insert, onInsert, query, unread, markSeen, lastActivity, close };
 }
