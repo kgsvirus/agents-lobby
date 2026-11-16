@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Agent, View, fetchAgents, isVisible } from './data/api';
-import { useMessages } from './hooks/useMessages';
+import { Agent, View, fetchAgents, fetchLastActivity } from './data/api';
+import { useMessages, viewKey } from './hooks/useMessages';
 import { useTheme } from './hooks/useTheme';
 import { Sidebar } from './components/Sidebar';
 import { ChatFeed } from './components/ChatFeed';
@@ -10,12 +10,24 @@ import { ThemeToggle } from './components/ThemeToggle';
 export default function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [view, setView] = useState<View>({ kind: 'boss' });
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const msgs = useMessages();
+  // Sidebar groups: expanded by default (empty collapsed set on first
+  // load); the user's collapse choices persist across load/reload.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('lobby.sidebar.collapsed');
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [lastActivity, setLastActivity] = useState<Record<string, string | null>>({});
+  const { feed, loadOlder, recents } = useMessages(view, agents);
   const [theme, selectTheme] = useTheme();
 
   useEffect(() => {
     fetchAgents().then(setAgents).catch(() => setAgents([]));
+    // Store-backed sidebar stamps: one fetch on load, no polling.
+    fetchLastActivity().then(setLastActivity).catch(() => {});
   }, []);
 
   const title =
@@ -31,15 +43,21 @@ export default function App() {
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 dark:bg-[#111] dark:text-gray-200">
       <Sidebar
         agents={agents}
-        msgs={msgs}
+        recents={recents}
+        lastActivity={lastActivity}
         view={view}
-        expanded={expanded}
+        collapsed={collapsed}
         theme={theme}
         onTheme={selectTheme}
         onToggleExpand={(p) =>
-          setExpanded((prev) => {
+          setCollapsed((prev) => {
             const next = new Set(prev);
             next.has(p) ? next.delete(p) : next.add(p);
+            try {
+              localStorage.setItem('lobby.sidebar.collapsed', JSON.stringify([...next]));
+            } catch {
+              /* storage unavailable — session-only */
+            }
             return next;
           })
         }
@@ -58,8 +76,13 @@ export default function App() {
           </span>
         </div>
         <ChatFeed
-          msgs={msgs.filter((m) => isVisible(m, view, agents))}
+          msgs={feed.messages}
           directional={view.kind !== 'boss'}
+          loadingOlder={feed.loadingOlder}
+          hasMore={feed.hasMore}
+          ready={feed.ready}
+          onLoadOlder={loadOlder}
+          resetKey={viewKey(view)}
         />
         <Composer
           key={`${view.kind}:${'name' in view ? view.name : ''}`}

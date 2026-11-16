@@ -30,19 +30,45 @@ export const viewParam = (view: View | null): string | null => {
   return view.kind; // 'all' | 'boss'
 };
 
+export interface MessagePage {
+  messages: Message[];
+  hasMore: boolean; // more rows exist in the fetch direction (upward: older remain)
+}
+
 export const fetchMessages = async (
   view: View | null = null,
-  after = 0,
-  limit = 500,
-): Promise<Message[]> => {
+  opts: { after?: number; before?: number; limit?: number } = {},
+): Promise<MessagePage> => {
   const params = new URLSearchParams({
-    after: String(after),
-    limit: String(limit),
+    limit: String(opts.limit ?? 10),
   });
+  if (opts.after) params.set('after', String(opts.after));
+  if (opts.before) params.set('before', String(opts.before));
   const viewValue = viewParam(view);
   if (viewValue !== null) params.set('view', viewValue);
   return (await fetch(`/api/messages?${params}`)).json();
 };
+
+// SSE: the bridge pushes every new message row the moment it lands in
+// the store. Returns the EventSource so the caller can close it on
+// unmount; its auto-reconnect is the safety net (on reconnect, catch
+// up with after=<newestId> so nothing is missed).
+export const subscribeStream = (onRow: (m: Message) => void): EventSource => {
+  const es = new EventSource('/api/stream');
+  es.onmessage = (e) => {
+    try {
+      onRow(JSON.parse(e.data) as Message);
+    } catch {
+      /* ignore malformed frames */
+    }
+  };
+  return es;
+};
+
+// Store-backed last-activity stamps (F6): { all, boss, "agent:<name>" } → ISO ts.
+// One fetch on load; project views aggregate their agents client-side.
+export const fetchLastActivity = async (): Promise<Record<string, string | null>> =>
+  (await fetch('/api/last-activity')).json();
 
 export const sendMessage = async (
   to: string[] | 'all',

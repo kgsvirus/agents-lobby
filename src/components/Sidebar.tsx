@@ -4,9 +4,10 @@ import { Theme } from '../hooks/useTheme';
 
 interface Props {
   agents: Agent[];
-  msgs: Message[];
+  recents: Message[];
+  lastActivity: Record<string, string | null>;
   view: View;
-  expanded: Set<string>;
+  collapsed: Set<string>;
   theme: Theme;
   onTheme: (t: Theme) => void;
   onToggleExpand: (project: string) => void;
@@ -15,19 +16,36 @@ interface Props {
 
 export function Sidebar({
   agents,
-  msgs,
+  recents,
+  lastActivity,
   view,
-  expanded,
+  collapsed,
   theme,
   onTheme,
   onToggleExpand,
   onSelect,
 }: Props) {
   const groups = projectGroups(agents);
-  const lastFor = (names: string[]) => {
-    const own = msgs.filter((m) => names.includes(m.from));
-    return own.length ? hh(own[own.length - 1].time) : '';
+  // Store-backed last-activity (F6): the /api/last-activity map is the source
+  // of truth; the recents window (SSE-updated) is only a fallback when the
+  // map lacks the key. Project rows aggregate their agents' stamps.
+  const stamp = (key: string, names: string[]): string => {
+    const ts =
+      lastActivity[key] ??
+      names
+        .map((n) => lastActivity[`agent:${n}`] ?? '')
+        .filter(Boolean)
+        .sort()
+        .slice(-1)[0] ??
+      (recents.filter((m) => names.includes(m.from)).slice(-1)[0]?.time ?? null);
+    return ts ? hh(ts) : '';
   };
+  const bossStamp = (() => {
+    const ts =
+      lastActivity['boss'] ??
+      (recents.filter((m) => m.from === 'human').slice(-1)[0]?.time ?? null);
+    return ts ? hh(ts) : '';
+  })();
 
   const active = (v: View) =>
     v.kind === view.kind && ('name' in v ? (view as { name: string }).name === v.name : true)
@@ -48,9 +66,7 @@ export function Sidebar({
       >
         <b>Boss</b>
         <span className="text-[11px] text-gray-600 dark:text-gray-400">
-          {msgs.filter((m) => m.from === 'human').length
-            ? ` — ${hh(msgs.filter((m) => m.from === 'human').slice(-1)[0].time)}`
-            : ''}
+          {bossStamp ? ` — ${bossStamp}` : ''}
         </span>
       </div>
       <div
@@ -59,7 +75,9 @@ export function Sidebar({
       >
         <b>All projects</b>
       </div>
-      {Object.entries(groups).map(([project, list]) => (
+      {Object.entries(groups).map(([project, list]) => {
+        const s = stamp(`project:${project}`, list.map((a) => a.name));
+        return (
         <div key={project}>
           <div
             className={`row flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5 ${active({ kind: 'project', name: project })}`}
@@ -72,24 +90,32 @@ export function Sidebar({
                 onToggleExpand(project);
               }}
             >
-              {expanded.has(project) ? '▾' : '▸'}
+              {!collapsed.has(project) ? '▾' : '▸'}
             </span>
             <b>{project}</b>
-            <span className="text-[11px] text-gray-600 dark:text-gray-400">— {lastFor(list.map((a) => a.name))}</span>
+            <span className="text-[11px] text-gray-600 dark:text-gray-400">
+              {s ? ` — ${s}` : ''}
+            </span>
           </div>
-          {list.map((a) => (
+          {list.map((a) => {
+            const as = stamp(`agent:${a.name}`, [a.name]);
+            return (
             <div
               key={a.name}
               className={`row cursor-pointer rounded-md py-1 pl-7 text-xs ${active({ kind: 'agent', name: a.name })}`}
-              style={{ display: expanded.has(project) ? 'block' : 'none' }}
+              style={{ display: !collapsed.has(project) ? 'block' : 'none' }}
               onClick={(e) => onSelect({ kind: 'agent', name: a.name }, e.currentTarget)}
             >
               {a.name}{' '}
-              <span className="text-[11px] text-gray-600 dark:text-gray-400">— {lastFor([a.name])}</span>
+              <span className="text-[11px] text-gray-600 dark:text-gray-400">
+                {as ? ` — ${as}` : ''}
+              </span>
             </div>
-          ))}
+            );
+          })}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

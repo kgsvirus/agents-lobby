@@ -28,7 +28,7 @@ export function MessageBubble({
       : `${m.from} → ${to} · ${hh(m.time)}`
     : `${kind === 'boss' ? 'Boss' : 'Human'} · ${hh(m.time)}`;
   return (
-    <div className={`mb-2.5 flex w-fit max-w-[70%] flex-col ${right ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
+    <div data-id={m.id} className={`mb-2.5 flex w-fit max-w-[70%] flex-col ${right ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
       <div
         className={`mb-0.5 text-[10px] ${
           kind === 'boss'
