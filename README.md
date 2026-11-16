@@ -154,6 +154,7 @@ exceeds ~5 entries.
 | Skill | Purpose |
 |---|---|
 | `registering-lobby-agents` | Register a project-head session into the lobby (dedup check → name → provision → register → report) |
+| `moving-projects-into-lobby` | Move a project into/out of the `projects/` workstation folder (lock escalation, worktree repair, static-path sweep, session re-bind) |
 
 ## Not (yet) supported
 
