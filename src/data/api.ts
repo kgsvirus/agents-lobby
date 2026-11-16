@@ -70,6 +70,9 @@ export const subscribeStream = (onRow: (m: Message) => void): EventSource => {
 export const fetchLastActivity = async (): Promise<Record<string, string | null>> =>
   (await fetch('/api/last-activity')).json();
 
+export const fetchLocalProjects = async (): Promise<string[]> =>
+  (await fetch('/api/local-projects')).json();
+
 export const sendMessage = async (
   to: string[] | 'all',
   message: string,

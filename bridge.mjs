@@ -320,6 +320,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Real folder listing of the machine-local projects/ workspace — the
+  // registry doesn't know unregistered projects (e.g. first-project).
+  if (
+    req.method === "GET" &&
+    new URL(req.url, "http://x").pathname === "/api/local-projects"
+  ) {
+    const entries = await fs.readdir("./projects", { withFileTypes: true });
+    json(
+      200,
+      entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name),
+    );
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/webhook") {
     let body = "";
     for await (const chunk of req) body += chunk;

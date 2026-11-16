@@ -1,6 +1,4 @@
 import { Agent, Message, View, hh, projectGroups } from '../data/api';
-import { ThemeToggle } from './ThemeToggle';
-import { Theme } from '../hooks/useTheme';
 
 interface Props {
   agents: Agent[];
@@ -8,8 +6,6 @@ interface Props {
   lastActivity: Record<string, string | null>;
   view: View;
   collapsed: Set<string>;
-  theme: Theme;
-  onTheme: (t: Theme) => void;
   onToggleExpand: (project: string) => void;
   onSelect: (view: View, el: HTMLElement) => void;
 }
@@ -20,8 +16,6 @@ export function Sidebar({
   lastActivity,
   view,
   collapsed,
-  theme,
-  onTheme,
   onToggleExpand,
   onSelect,
 }: Props) {
@@ -58,7 +52,6 @@ export function Sidebar({
         <h1 className="text-sm font-bold text-gray-900 dark:text-white">
           Agents-Lobby
         </h1>
-        <ThemeToggle theme={theme} onSelect={onTheme} />
       </div>
       <div
         onClick={(e) => onSelect({ kind: 'boss' }, e.currentTarget)}
