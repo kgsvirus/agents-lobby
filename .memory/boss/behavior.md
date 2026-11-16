@@ -85,3 +85,9 @@ at the top of this file.)
   approve-then-commit-separately. Sharpened per the human: only the
   word "commit" commits; "approve" applies the change, never commits.
   (Gate 4)
+- 2026-11-16 — Instruction-hub rewrite (D25) dropped the approved
+  boss-note section from the written `AGENTS.md`; caught by the human.
+  Second instance of the same class today (earlier: a `boss.md` edit
+  that merged two bullets). Lesson: verify written deliverables
+  against the approved structure before declaring the step complete.
+  (Gate 7)
