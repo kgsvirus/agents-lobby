@@ -13,6 +13,9 @@ agents.json
 # each holds its own git repo - created by setup.mjs)
 projects/
 
+# Local archives (human-managed, not part of the lobby repo)
+.archives/
+
 # OS junk
 Thumbs.db
 desktop.ini
