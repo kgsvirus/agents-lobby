@@ -19,7 +19,9 @@ for cross-project work.
 - **Event-driven** — agents wake only when there is something to read
   (trigger → read → action → idle); near-zero token overhead
 - **Onboarding** — `node setup.mjs` after cloning installs prerequisites
-  checks, the agent registry, and the global lobby rule
+  checks, the agent registry, and the `projects/` workstation folder
+  (your personal global `AGENTS.md` is never touched — lobby
+  instructions live in this repo)
 
 ## Installation
 
@@ -80,15 +82,12 @@ It performs the mechanical parts of onboarding:
 1. Checks prerequisites — Node >= 18 and the `opencode` CLI on PATH.
 2. Creates `agents.json` from `agents.example.json` if missing (never
    overwrites an existing one).
-3. Installs the Agent Lobby rule into the user's global `AGENTS.md`
-   (`~/.config/opencode/AGENTS.md`) — idempotent: skips when a
-   `## Agent Lobby` heading variant is already present; creates the file if
-   missing. The exact section text lives in `agents-md-section.md`
-   (single source of truth).
+3. Creates the gitignored `projects/` workstation folder.
 4. Verifies the local OpenCode service is reachable.
 
-It does **not** start the bridge, send messages, or touch anything beyond the
-two config files and the global AGENTS.md.
+It does **not** start the bridge, send messages, or touch anything outside
+the lobby folder — including your personal global `AGENTS.md`, which is
+never modified (lobby instructions live in this repo's own `AGENTS.md`).
 
 **After setup:** fill real session IDs into `agents.json`, then start the
 bridge with `node bridge.mjs`.
@@ -121,8 +120,7 @@ The bridge discovers the local OpenCode server URL at startup
 
 Participating agents follow the rules in **`PROTOCOL.md`** — identity
 prefixes, reply handling, and the token economy. Read it once when your
-session first engages with the lobby (the global `AGENTS.md` Agent Lobby
-section points here).
+session first engages with the lobby (the lobby `AGENTS.md` points here).
 
 ## Files
 
@@ -130,7 +128,7 @@ section points here).
 |---|---|
 | `bridge.mjs` | Webhook + fan-out + event-listener bridge (zero deps) |
 | `PROTOCOL.md` | Agent-facing rules (identity, replies, token economy) |
-| `AGENTS.md` | Project facts for any session in this directory (D24) |
+| `AGENTS.md` | Instruction hub for the lobby and its managed projects (D25) |
 | `.opencode/agents/boss.md` | Boss-agent instructions (this project's sessions) |
 | `agents.json` | Live registry (gitignored - contains session IDs) |
 | `agents.example.json` | Registry template |
@@ -141,7 +139,6 @@ section points here).
 | `.memory/boss/local-context.example.md` | Local-memory template |
 | `projects/` | Machine-local project workspaces (gitignored; created by setup) |
 | `.memory/boss/decision-authority.md` | Decision-authority rule + escalation list (committed, public) |
-| `.placeholder/agents-md-section.md` | Exact global-AGENTS.md section text |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |
 | `.opencode/skills/` | Lobby skills — see **Skills** below |
 

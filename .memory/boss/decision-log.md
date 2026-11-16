@@ -90,8 +90,8 @@
   gate (only the word "commit" commits; "approve" applies without
   committing), commit batching, and send gate — see `behavior.md`.
   Releases: annotated tag after version bump.
-- **Onboarding:** `node setup.mjs` (idempotent, heading-variant-matching
-  global-AGENTS.md install); `registering-lobby-agents` skill for new agents.
+- **Onboarding:** `node setup.mjs` (idempotent; no global-file writes —
+  D25); `registering-lobby-agents` skill for new agents.
 
 ## Decision log (approved)
 
@@ -247,3 +247,4 @@
 - **O08** Agent-to-agent direct messaging — out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
+- **D25** Lobby-owned instructions (supersedes D08 global-install step; refines D22/D24): the user-global AGENTS.md no longer carries lobby or general instructions - AGENTS.md in this repo is the single instruction hub (audience: any session in the lobby or its managed projects; content: the human general AI-development instructions 1-10 merged from global + lobby rules 11 + the D22 boss-boundary note 12). Managed projects carry a thin pointer section in their root AGENTS.md (read ..\\..\\AGENTS.md before work) - ambient parent discovery does not apply (nested git repos stop at their own root, verified against the instructions docs). setup.mjs no longer writes to the user global file (new-user onboarding touches nothing outside the lobby folder); .placeholder/agents-md-section.md retired; registering skill provisions pointer-form; the per-project catalog stays in local-context (machine-specific). Existing projects own instructions otherwise preserved. - approved
