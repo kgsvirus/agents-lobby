@@ -32,15 +32,17 @@ so the bridge can message it.
      `<this skill's directory>/../../../.placeholder/agent/coordinator.md` to
      `<project dir>/.opencode/agents/coordinator.md`. The template carries the
      identity line ("You are registered as this project's `name` in the
-     lobby's `agents.json`").
+     lobby's `agents.json`") in pointer form — full lobby instructions live
+     in the lobby repo's `AGENTS.md` hub, which the project's own
+     `AGENTS.md` pointer section directs every agent to read.
    - **`coordinator.md` EXISTS** (the project has its own instructions):
      - Detection (tolerant, not strict — humans may rename headings): find a
        section by **heading variant** (`## Agent Lobby`, `## Lobby
        communication`, etc.) **or** by content mentioning Agents-Lobby /
        `agents.json` / registered.
      - **No lobby section found** → append the template's **"## Lobby
-       communication"** section (verbatim copy: identity, reply-in-session,
-       no-webhook, PROTOCOL pointer).
+       communication"** section (pointer form: identity, reply-in-session,
+       no-webhook, pointer to the lobby hub `AGENTS.md` + PROTOCOL).
      - **Section found but content differs from the template** → ALIGN:
        replace the section content with the template's copy (preserve the
        human's heading position/formatting; normalize non-standard headings
@@ -57,6 +59,24 @@ so the bridge can message it.
      exists without `default_agent` → add the field, preserving everything
      else; exists with a **different** `default_agent` → STOP and ask the
      human; do not change it.
+   - **Project root `AGENTS.md` pointer:** ensure the project's root
+     `AGENTS.md` carries this section EXACTLY, with `<lobby pointer>`
+     replaced by the relative path from the project's directory to the
+     lobby repo root — COMPUTED at registration time (e.g. Node
+     `path.relative(projectDir, lobbyRoot)` or equivalent; never hardcode
+     `..\..\` — that only fits the standard `projects/` layout, since
+     projects may live anywhere the human delegates):
+
+     ```markdown
+     ## Agents-Lobby
+     You are a lobby-managed project. Before any work in this project, read <lobby pointer> (the lobby's instruction hub - general + lobby rules) and follow it.
+     ```
+
+     File missing → create it with just this section. Section present and
+     matching → verified, report. Section present but differing → replace
+     it with the section above (preserve the rest of the file). Section
+     absent → append it. Pointer cannot be ensured (file unwritable,
+     computation fails) → WARN and surface it in the step 6 report.
 
 4. **Create the session:**
 
@@ -76,7 +96,7 @@ so the bridge can message it.
      immediately; no waiting.
 
 5. **Register:** append to
-   `F:\DEVELOPMENT\AI\PROJECTS\Agents-Lobby\agents.json` inside `agents`:
+   `<lobby repo root>/agents.json` (the lobby repo this skill lives in) inside `agents`:
 
    ```json
    { "name": "<human's name>", "project": "<project name>", "session": "ses_..." }

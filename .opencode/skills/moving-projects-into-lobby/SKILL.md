@@ -65,8 +65,8 @@ PHASE 5 — LOBBY RE-WIRING
    a. Sessions: directory-bound → re-bind each agent session with
       session_move (keeps session ID + history; agents.json unchanged)
    b. Stale OpenCode worktree links under ~/.local/share → flag only
-   c. Conventions: global AGENTS.md §8.1 + placeholder source must
-      say where projects live; setup.mjs creates projects/
+   c. Conventions: the lobby hub AGENTS.md (project-location bullet in
+      section 11) says where projects live; setup.mjs creates projects/
    d. Memory: local-context.md workstation-layout note (gitignored)
 ─────────────────────────────────────────────────────────────────────
 PHASE 6 — VERIFY

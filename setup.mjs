@@ -1,12 +1,7 @@
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SECTION_FILE = './.placeholder/agents-md-section.md';
-// Match any heading variant: "## Agent Lobby", "## 8.1 Agent Lobby", "### 9. Agent Lobby", etc.
-const SECTION_PATTERN = /^#{1,6} [\d.]*\s*Agent Lobby\b/m;
-const GLOBAL_AGENTS_MD = path.join(os.homedir(), '.config', 'opencode', 'AGENTS.md');
 const REGISTRY = './agents.json';
 const TEMPLATE = './agents.example.json';
 const LOCAL_CONTEXT_DIR = './.memory/boss';
@@ -56,26 +51,6 @@ try {
 } catch {
   await fs.mkdir('./projects', { recursive: true });
   report.push('DONE created ./projects (gitignored - place project workspaces here)');
-}
-
-// 3. Global AGENTS.md: install section 8.1 idempotently
-const section = await fs.readFile(SECTION_FILE, 'utf8');
-let agentsMd;
-try {
-  agentsMd = await fs.readFile(GLOBAL_AGENTS_MD, 'utf8');
-} catch {
-  agentsMd = null;
-}
-if (agentsMd === null) {
-  await fs.mkdir(path.dirname(GLOBAL_AGENTS_MD), { recursive: true });
-  await fs.writeFile(GLOBAL_AGENTS_MD, section, 'utf8');
-  report.push(`DONE created ${GLOBAL_AGENTS_MD} with the Agent Lobby section`);
-} else if (SECTION_PATTERN.test(agentsMd)) {
-  report.push(`OK   Agent Lobby section already in global AGENTS.md, skipped`);
-} else {
-  const sep = agentsMd.endsWith('\n') ? '\n' : '\n\n';
-  await fs.appendFile(GLOBAL_AGENTS_MD, sep + section, 'utf8');
-  report.push(`DONE appended Agent Lobby section to ${GLOBAL_AGENTS_MD}`);
 }
 
 // 4. Verify local OpenCode service
