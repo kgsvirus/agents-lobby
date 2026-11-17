@@ -140,6 +140,11 @@ $env:LOBBY_PORT='3005'; $env:LOBBY_DB_PATH='.data/messages.db'
 npx tsx server/src/server.ts     # serves the API and the dashboard on :3005
 ```
 
+**One server at a time:** run only a single lobby server against a database.
+A second instance pointed at the same `.data/messages.db` (e.g. a forgotten
+dev server on :3006 started with the same `LOBBY_DB_PATH`) double-captures
+OpenCode events and double-wakes the boss.
+
 Open the dashboard: `http://localhost:3005/ui`
 
 The server discovers the local OpenCode server URL at startup
