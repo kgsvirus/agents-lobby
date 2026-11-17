@@ -99,12 +99,20 @@ never modified (lobby instructions live in this repo's own `AGENTS.md`).
 **After setup:** fill real session IDs into `agents.json`, build the
 dashboard (`npm run build -w web`), and start the server (see "Running").
 
-**Upgrading an existing install:** run `node setup.mjs` after pulling — with
-an existing `agents.json` it switches to upgrade checks (read-only; it never
-modifies your registry, database, or runtime state) and tells you exactly
-which steps remain, typically `npm install` and `npm run build -w web`. Your
-`.data/messages.db` migrates automatically at the first server start; take a
-copy of it first if you want a rollback point.
+**Migrating from the legacy architecture (pre-v1.3.0):** if your clone
+predates v1.3.0, a `git pull` replaces the legacy zero-dependency bridge
+(`bridge.mjs`, Vite dashboard) with the modular `server/` + `web/`
+architecture. Your data is safe: `agents.json` keeps working unchanged, and
+`.data/messages.db` migrates automatically at the first server start
+(additive). **If your legacy `node bridge.mjs` process is still running, stop
+it first (Ctrl+C in its terminal, or end the process)** — the pull deletes
+the file, but a running process survives it and keeps holding port 3005.
+Then take your rollback copy of `.data/messages.db`, and run
+`node setup.mjs`: with an existing install it switches to read-only upgrade
+checks (it never modifies your registry, database, or runtime state) and
+lists the ordered steps that remain — typically `npm install` and
+`npm run build -w web`. It also detects a still-running bridge on port 3005
+and tells you so at that moment.
 
 **Filesystem note:** `npm install` (workspace symlinks) and `next build` fail
 on drives without symlink support (e.g. exFAT). On such a drive, install and
