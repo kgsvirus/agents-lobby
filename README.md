@@ -99,6 +99,18 @@ never modified (lobby instructions live in this repo's own `AGENTS.md`).
 **After setup:** fill real session IDs into `agents.json`, build the
 dashboard (`npm run build -w web`), and start the server (see "Running").
 
+**Upgrading an existing install:** run `node setup.mjs` after pulling — with
+an existing `agents.json` it switches to upgrade checks (read-only; it never
+modifies your registry, database, or runtime state) and tells you exactly
+which steps remain, typically `npm install` and `npm run build -w web`. Your
+`.data/messages.db` migrates automatically at the first server start; take a
+copy of it first if you want a rollback point.
+
+**Filesystem note:** `npm install` (workspace symlinks) and `next build` fail
+on drives without symlink support (e.g. exFAT). On such a drive, install and
+build in a clone on an NTFS drive and copy `node_modules` / `web\out` over —
+this is how the reference deployment runs.
+
 ## Registering a project head
 
 The `registering-lobby-agents` skill handles the full flow (agents can run it
