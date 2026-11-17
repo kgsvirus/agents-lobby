@@ -47,8 +47,13 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col bg-gray-50 font-sans text-gray-900 dark:bg-[#111] dark:text-gray-200">
       <TopNav module={module} onModule={setModule} theme={theme} onTheme={selectTheme} />
-      {module === 'chat' && (
-        <div className="flex min-h-0 flex-1">
+      {/* Chat stays MOUNTED but hidden across module round-trips: this
+          preserves ChatFeed reading position and the Composer draft.
+          Projects/Office remain plain conditional mounts. */}
+      <div
+        className="flex min-h-0 flex-1"
+        style={module === 'chat' ? undefined : { display: 'none' }}
+      >
           <Sidebar
             agents={agents}
             recents={recents}
@@ -71,11 +76,12 @@ export default function App() {
           />
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center bg-gray-100 px-3 py-2 dark:bg-[#161616]">
-              <span className="text-xs font-bold text-gray-900 dark:text-white">
+              <span className="text-[18px] font-bold text-gray-900 dark:text-white">
                 {title}
               </span>
             </div>
             <ChatFeed
+              active={module === 'chat'}
               msgs={feed.messages}
               directional={view.kind !== 'boss'}
               loadingOlder={feed.loadingOlder}
@@ -92,7 +98,6 @@ export default function App() {
             />
           </div>
         </div>
-      )}
       {module === 'projects' && (
         <div className="flex min-h-0 flex-1">
           <ProjectsSidebar

@@ -41,7 +41,7 @@ export function MessageBubble({
         {meta}
       </div>
       <div
-        className={`w-fit whitespace-pre-wrap break-words rounded-xl px-2.5 py-1.5 ${
+        className={`w-fit whitespace-pre-wrap break-words rounded-xl px-2.5 py-1.5 text-[15px] ${
           right ? 'rounded-tr-sm' : 'rounded-tl-sm'
         } ${
           kind === 'boss'

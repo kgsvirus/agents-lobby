@@ -3,6 +3,7 @@ import { Message } from '../data/api';
 import { MessageBubble } from './MessageBubble';
 
 export function ChatFeed({
+  active = true,
   msgs,
   directional,
   loadingOlder,
@@ -11,6 +12,7 @@ export function ChatFeed({
   onLoadOlder,
   resetKey,
 }: {
+  active?: boolean;
   msgs: Message[];
   directional?: boolean;
   loadingOlder?: boolean;
@@ -20,6 +22,13 @@ export function ChatFeed({
   resetKey: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // display:none zeroes scrollTop, so when the module round-trips the feed
+  // re-display restores the reader's position from here (see the reShow
+  // path in the layout effect).
+  const lastScroll = useRef(0);
+  // Set when a render happens with the feed hidden; the next visible
+  // layout-effect run does the re-show position restore (R2b).
+  const wasHidden = useRef(false);
   // Scroll anchoring: when an older page prepends, keep the user's reading
   // position instead of letting the container jump to the new top. atBottom
   // records where the reader rested after the previous render, so an APPEND
@@ -37,13 +46,27 @@ export function ChatFeed({
   });
 
   useLayoutEffect(() => {
+    // Hidden feed: every measurement is 0/0, so scrolling and the
+    // too-short auto-fetch would misbehave (the auto-fetch condition
+    // `scrollHeight <= clientHeight` is trivially true and would
+    // chain-load the whole history invisibly). Skip while inactive —
+    // SSE appends just sit in the DOM until the module is shown again —
+    // and remember it so the next visible run restores the reader.
+    if (!active) {
+      wasHidden.current = true;
+      return;
+    }
     const el = ref.current;
     if (!el) return;
+    const reShow = wasHidden.current;
+    wasHidden.current = false;
     const firstId = msgs[0]?.id ?? 0;
     const a = anchor.current;
+    let scrolled = false;
     if (a.key !== resetKey) {
       el.scrollTo({ top: el.scrollHeight });
       a.pending = null;
+      scrolled = true;
     } else if (firstId < a.firstId && a.atBottom) {
       // Older page landed while the reader is at the bottom (they scrolled
       // down while the load was in flight): follow the bottom instead of the
@@ -51,17 +74,30 @@ export function ChatFeed({
       // were at trigger time, undoing the scroll they just made.
       el.scrollTo({ top: el.scrollHeight });
       a.pending = null;
+      scrolled = true;
     } else if (a.pending && firstId < a.firstId) {
       // Older page landed: put the anchored message back where the reader
       // last saw it — immune to SSE appends that grew the bottom meanwhile.
+      // This is also the R2b re-show path: an older-page load in flight at
+      // hide time whose prepend landed while hidden (sequence: hide →
+      // prepend lands, layout effect gated → re-show → the anchored
+      // message goes back at its recorded viewport position; a.firstId is
+      // still the pre-prepend value because the hidden runs were gated).
       const node = el.querySelector(`[data-id="${a.pending.id}"]`);
       if (node) el.scrollTop = (node as HTMLElement).offsetTop - a.pending.pos;
       a.pending = null;
+      scrolled = true;
     } else if (firstId > a.firstId || (firstId === a.firstId && a.atBottom)) {
       // New view, or appends while the reader was at the bottom: follow.
       el.scrollTo({ top: el.scrollHeight });
       a.pending = null;
+      scrolled = true;
     }
+    // Re-show restore: display:none zeroed scrollTop. When a pending
+    // element anchor fired above (or the reader was following the bottom)
+    // the branches already put them back; otherwise restore their exact
+    // recorded offset.
+    if (reShow && !scrolled && !a.atBottom) el.scrollTop = lastScroll.current;
     // If the view has more history but isn't scrollable yet (short pages),
     // auto-fetch once so the scroll-to-load trigger stays reachable.
     if (el.scrollHeight <= el.clientHeight && hasMore && !loadingOlder) onLoadOlder?.();
@@ -71,11 +107,15 @@ export function ChatFeed({
       atBottom: el.scrollHeight - el.scrollTop - el.clientHeight < 4,
       pending: a.pending,
     };
-  }, [msgs, resetKey, hasMore, loadingOlder]);
+  }, [msgs, resetKey, hasMore, loadingOlder, active]);
 
   const onScroll = () => {
+    // Queued/synthetic scroll events must not measure or fetch while the
+    // feed is hidden (display:none zeroes every measurement).
+    if (!active) return;
     const el = ref.current;
     if (!el) return;
+    lastScroll.current = el.scrollTop;
     // F5: keep bottom-position current between renders — the layout effect
     // reads this at append time, so a reader who scrolled up after the last
     // render isn't yanked back down by a stale atBottom=true.

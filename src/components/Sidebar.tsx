@@ -48,11 +48,6 @@ export function Sidebar({
 
   return (
     <div className="w-64 shrink-0 overflow-y-auto border-r border-gray-300 bg-gray-100 p-2.5 dark:border-gray-700 dark:bg-[#181818]">
-      <div className="mb-2.5 flex items-center justify-between">
-        <h1 className="text-sm font-bold text-gray-900 dark:text-white">
-          Agents-Lobby
-        </h1>
-      </div>
       <div
         onClick={(e) => onSelect({ kind: 'boss' }, e.currentTarget)}
         className={`row cursor-pointer rounded-md px-2 py-1.5 ${active({ kind: 'boss' })}`}

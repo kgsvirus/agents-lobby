@@ -16,20 +16,22 @@ export function ProjectsSidebar({ projects, selected, onSelect }: Props) {
       <div className="mb-2.5 flex items-center justify-between">
         <h1 className="text-sm font-bold text-gray-900 dark:text-white">Projects</h1>
       </div>
-      <div
+      <button
         onClick={() => onSelect(null)}
-        className={`row cursor-pointer rounded-md px-2 py-1.5 ${active(null)}`}
+        aria-current={selected === null || undefined}
+        className={`row w-full cursor-pointer rounded-md px-2 py-1.5 text-left ${active(null)}`}
       >
         <b>ALL</b>
-      </div>
+      </button>
       {projects.map((name) => (
-        <div
+        <button
           key={name}
           onClick={() => onSelect(name)}
-          className={`row cursor-pointer rounded-md px-2 py-1.5 ${active(name)}`}
+          aria-current={selected === name || undefined}
+          className={`row w-full cursor-pointer rounded-md px-2 py-1.5 text-left ${active(name)}`}
         >
           {name}
-        </div>
+        </button>
       ))}
     </div>
   );

@@ -34,11 +34,17 @@ export function TopNav({
   }, [open]);
 
   return (
-    <nav className="relative flex items-center gap-1 border-b border-gray-300 bg-gray-100 px-3 py-1.5 dark:border-gray-700 dark:bg-[#161616]">
+    <nav className="relative flex items-center border-b border-gray-300 bg-gray-100 px-3 py-1.5 dark:border-gray-700 dark:bg-[#161616]">
+      <h1 className="text-sm font-bold text-gray-900 dark:text-white">
+        Agents Lobby
+      </h1>
+      <div className="mx-3 h-4 w-px bg-gray-300 dark:bg-gray-600" />
+      <div className="flex items-center gap-1">
       {MODULES.map((m) => (
         <button
           key={m.id}
           onClick={() => onModule(m.id)}
+          aria-current={module === m.id ? 'page' : undefined}
           className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
             module === m.id
               ? 'bg-blue-700 text-white dark:bg-blue-600'
@@ -48,6 +54,7 @@ export function TopNav({
           {m.label}
         </button>
       ))}
+      </div>
       <div className="ml-auto">
         <button
           onClick={() => setOpen((o) => !o)}
@@ -68,6 +75,9 @@ export function TopNav({
             <div className="flex items-center justify-between gap-2 px-1 py-1">
               <button
                 onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
+                role="switch"
+                aria-label="Toggle dark or light theme"
+                aria-checked={theme === 'dark'}
                 title="Toggle theme"
                 className={`relative h-5 w-10 rounded-full transition-colors ${
                   theme === 'dark' ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-500'
