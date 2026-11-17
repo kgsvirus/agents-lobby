@@ -99,6 +99,11 @@ never modified (lobby instructions live in this repo's own `AGENTS.md`).
 **After setup:** fill real session IDs into `agents.json`, build the
 dashboard (`npm run build -w web`), and start the server (see "Running").
 
+**Syncing the Boss session:** after starting OpenCode, select the **Boss**
+agent and prompt *"Sync your session in lobby config"* — it registers the
+session you are in as the boss in `agents.json` automatically (the registry
+hot-reloads; no restart needed).
+
 **Migrating from the legacy architecture (pre-v1.3.0):** a `git pull` replaces
 the legacy bridge with the modular `server/` + `web/` architecture. Your
 registry (`agents.json`) and messages are preserved. Stop any still-running
