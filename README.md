@@ -112,7 +112,8 @@ Then take your rollback copy of `.data/messages.db`, and run
 checks (it never modifies your registry, database, or runtime state) and
 lists the ordered steps that remain — typically `npm install` and
 `npm run build -w web`. It also detects a still-running bridge on port 3005
-and tells you so at that moment.
+and tells you so at that moment — or run `node setup.mjs --fix` to perform
+them automatically (it backs up the database for you before installing).
 
 **Filesystem note:** `npm install` (workspace symlinks) and `next build` fail
 on drives without symlink support (e.g. exFAT). On such a drive, install and
