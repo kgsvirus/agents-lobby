@@ -114,11 +114,12 @@ export default function App() {
             selected={projectSelection}
             onSelect={setProjectSelection}
           />
-          <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-gray-600 dark:text-gray-400">
+          {/* <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-gray-600 dark:text-gray-400">
             {projectSelection
               ? `Projects — ${projectSelection}`
               : 'Projects — select a project'}
-          </div>
+          </div> */}
+          <iframe src="/ui/mockups/kanban-board-mockup.html" title="Mockup" style={{flex: 1}}></iframe>
         </div>
       )}
       {module === 'office' && (

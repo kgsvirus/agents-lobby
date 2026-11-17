@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northstar · Workitem Flow Board</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #17202f;
+      --muted: #718096;
+      --line: #e7ebf2;
+      --canvas: #f5f7fb;
+      --surface: #ffffff;
+      --violet: #6857d8;
+      --violet-soft: #eeecff;
+      --teal: #149b91;
+      --amber: #c87b16;
+      --rose: #d55b72;
+      --blue: #3d77d2;
+      --green: #48a277;
+      --shadow: 0 18px 45px rgba(30, 42, 72, .07);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: -.01em;
+    }
+    .app-shell { max-width: 1680px; margin: 0 auto; padding: 28px 28px 52px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 36px; }
+    .brand-mark { display: flex; align-items: center; gap: 11px; color: var(--ink); font-weight: 800; letter-spacing: .08em; font-size: .76rem; }
+    .brand-dot { width: 17px; height: 17px; background: var(--violet); border-radius: 5px; box-shadow: 5px 5px 0 #cbc6ff; }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .workspace-pill, .soft-button { border: 1px solid var(--line); background: rgba(255,255,255,.75); color: #566176; border-radius: 10px; padding: 9px 13px; font-size: .82rem; font-weight: 700; }
+    .workspace-pill span { color: var(--violet); margin-right: 6px; }
+    .soft-button { cursor: default; }
+
+    .hero { display: flex; justify-content: space-between; align-items: end; gap: 28px; margin-bottom: 24px; }
+    .eyebrow { margin-bottom: 10px; color: var(--violet); text-transform: uppercase; letter-spacing: .16em; font-size: .7rem; font-weight: 800; }
+    h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 780; letter-spacing: -.065em; line-height: .98; }
+    .hero-copy { max-width: 660px; margin: 14px 0 0; color: var(--muted); font-size: 1rem; line-height: 1.55; }
+    .hero-note { max-width: 285px; padding: 16px 18px; border: 1px solid #dedbff; border-radius: 15px; background: #f2f0ff; color: #5c55a6; font-size: .78rem; line-height: 1.45; }
+    .hero-note strong { display: block; margin-bottom: 4px; color: #4b43a1; font-size: .84rem; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-bottom: 26px; }
+    .metric { min-height: 107px; padding: 17px 18px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow); }
+    .metric-label { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+    .metric-icon { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--violet-soft); color: var(--violet); font-size: .92rem; }
+    .metric-value { margin-top: 11px; font-size: 1.8rem; font-weight: 780; letter-spacing: -.06em; }
+    .metric-trend { margin-left: 5px; color: var(--green); font-size: .72rem; font-weight: 800; letter-spacing: 0; }
+
+    .board-wrap { border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.42); box-shadow: var(--shadow); overflow: hidden; }
+    .board-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.8); }
+    .board-title { display: flex; align-items: center; gap: 10px; font-size: .92rem; font-weight: 800; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #45b880; box-shadow: 0 0 0 4px #e0f5ea; }
+    .board-tools { display: flex; align-items: center; gap: 10px; }
+    .search-box, .assignee-select { height: 38px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: #48546a; font-size: .78rem; }
+    .search-box { width: 220px; padding: 0 12px; outline: none; }
+    .search-box:focus, .assignee-select:focus { border-color: #afa8ef; box-shadow: 0 0 0 3px #eeecff; }
+    .assignee-select { padding: 0 30px 0 11px; }
+    .phase-accordion .accordion-item { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+    .phase-accordion .accordion-item:last-child { border-bottom: 0; }
+    .phase-accordion .accordion-button { gap: 16px; padding: 19px 20px; background: rgba(255,255,255,.73); box-shadow: none; }
+    .phase-accordion .accordion-button:not(.collapsed) { color: var(--ink); background: #fff; box-shadow: inset 4px 0 0 var(--phase-color); }
+    .phase-accordion .accordion-button::after { width: 10px; height: 10px; background-size: 10px; }
+    .phase-index { display: grid; flex: 0 0 35px; width: 35px; height: 35px; place-items: center; border-radius: 11px; background: var(--phase-soft); color: var(--phase-color); font-size: .72rem; font-weight: 850; }
+    .phase-main { flex: 1 1 auto; min-width: 170px; }
+    .phase-name { font-size: .98rem; font-weight: 800; }
+    .phase-description { margin-top: 3px; color: var(--muted); font-size: .76rem; }
+    .phase-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding-right: 10px; }
+    .summary-chip { padding: 5px 9px; border-radius: 999px; background: #f4f6fa; color: #657085; font-size: .69rem; font-weight: 750; }
+    .summary-chip.health { background: #eaf7f0; color: #3f966e; }
+    .summary-chip.testing { background: #fff3e4; color: #b87320; }
+    .summary-chip.approval { background: #fdebef; color: #bd5165; }
+    .phase-accordion .accordion-body { padding: 0 20px 23px; background: #fff; }
+    .kanban-scroll { overflow-x: auto; padding: 4px 0 3px; }
+    .kanban-grid { display: grid; grid-template-columns: repeat(6, minmax(218px, 1fr)); gap: 11px; min-width: 1370px; }
+    .status-column { min-height: 275px; padding: 11px; border: 1px solid #e9edf4; border-radius: 14px; background: #f8f9fc; }
+    .status-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 2px 12px; }
+    .status-name { display: flex; align-items: center; gap: 7px; font-size: .74rem; font-weight: 800; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-color); }
+    .status-count { min-width: 22px; padding: 3px 6px; border-radius: 7px; background: #eceff5; color: #8490a2; text-align: center; font-size: .65rem; font-weight: 800; }
+    .work-card { position: relative; margin-bottom: 9px; padding: 12px 12px 11px; border: 1px solid #e7ebf2; border-radius: 11px; background: #fff; box-shadow: 0 5px 15px rgba(40, 51, 83, .045); transition: transform .15s ease, box-shadow .15s ease; }
+    .work-card:hover { transform: translateY(-2px); box-shadow: 0 9px 20px rgba(40, 51, 83, .1); }
+    .work-card::before { content: ""; position: absolute; left: -1px; top: 12px; width: 3px; height: 27px; border-radius: 0 4px 4px 0; background: var(--status-color); }
+    .work-top { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+    .work-code { color: #9aa4b5; font-size: .62rem; font-weight: 800; letter-spacing: .08em; }
+    .priority { width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; background: #cbd2de; }
+    .priority.high { background: var(--rose); box-shadow: 0 0 0 3px #fdebef; }
+    .priority.medium { background: var(--amber); box-shadow: 0 0 0 3px #fff3e4; }
+    .work-name { margin: 7px 0 10px; font-size: .8rem; font-weight: 770; line-height: 1.28; }
+    .work-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .status-pill { padding: 4px 7px; border-radius: 6px; background: var(--status-soft); color: var(--status-color); font-size: .61rem; font-weight: 800; white-space: nowrap; }
+    .assignee { display: flex; align-items: center; gap: 5px; color: #6e7a8f; font-size: .65rem; font-weight: 700; }
+    .avatar { display: grid; width: 21px; height: 21px; place-items: center; border-radius: 50%; background: #e9e6ff; color: #5a4fc5; font-size: .58rem; font-weight: 850; }
+    .empty-state { display: none; padding: 18px 4px 8px; color: #a4adbb; text-align: center; font-size: .68rem; }
+    .no-results { display: none; margin: 14px 0 2px; padding: 17px; border: 1px dashed #cdd4e0; border-radius: 12px; color: #79859a; text-align: center; font-size: .78rem; }
+    .footer-note { margin: 18px 3px 0; color: #8a95a6; font-size: .72rem; }
+
+    @media (max-width: 900px) {
+      .app-shell { padding: 20px 15px 38px; }
+      .topbar, .hero { align-items: start; flex-direction: column; }
+      .top-actions, .board-toolbar, .board-tools { width: 100%; }
+      .board-toolbar, .board-tools { align-items: stretch; flex-direction: column; }
+      .search-box, .assignee-select { width: 100%; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .phase-summary { justify-content: flex-start; padding-left: 51px; padding-right: 0; grid-column: 1 / -1; }
+      .phase-accordion .accordion-button { flex-wrap: wrap; }
+    }
+    @media (max-width: 500px) { .metrics { grid-template-columns: 1fr; } .hero-note { max-width: none; } }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <!-- <nav class="topbar" aria-label="Workspace navigation">
+      <div class="brand-mark"><span class="brand-dot" aria-hidden="true"></span>NORTHSTAR / DELIVERY CONTROL</div>
+      <div class="top-actions">
+        <div class="workspace-pill"><span>●</span> Product launch workspace</div>
+        <div class="soft-button">Last synced 2m ago</div>
+      </div>
+    </nav> -->
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Portfolio view · Q3 planning cycle</div>
+        <h1>Workitem flow board</h1>
+        <p class="hero-copy">A clear pulse on everything moving through discovery, delivery, testing, and approval—organized by phase so the next best action is always visible.</p>
+      </div>
+      <aside class="hero-note"><strong>Today’s focus</strong>Move the remaining testing cards into approval before Thursday’s release review.</aside>
+    </section>
+
+    <section class="metrics" aria-label="Board summary">
+      <div class="metric"><div class="metric-label">Active workitems <span class="metric-icon">↗</span></div><div class="metric-value">35 <span class="metric-trend">+8%</span></div></div>
+      <div class="metric"><div class="metric-label">Currently moving <span class="metric-icon">→</span></div><div class="metric-value">11 <span class="metric-trend">+3 today</span></div></div>
+      <div class="metric"><div class="metric-label">Ready for testing <span class="metric-icon">✓</span></div><div class="metric-value">07 <span class="metric-trend">2 urgent</span></div></div>
+      <div class="metric"><div class="metric-label">Avg. cycle time <span class="metric-icon">◷</span></div><div class="metric-value">6.4d <span class="metric-trend">−0.8d</span></div></div>
+    </section>
+
+    <section class="board-wrap" aria-label="Kanban workitem board">
+      <div class="board-toolbar">
+        <div class="board-title"><span class="live-dot" aria-hidden="true"></span>8 phases <span class="text-secondary fw-normal">/ 6 status states</span></div>
+        <div class="board-tools">
+          <input id="searchInput" class="search-box" type="search" placeholder="Search workitems…" aria-label="Search workitems">
+          <select id="assigneeFilter" class="assignee-select" aria-label="Filter by assignee"><option value="all">All assignees</option></select>
+        </div>
+      </div>
+
+      <div id="phaseAccordion" class="accordion phase-accordion"></div>
+      <div id="noResults" class="no-results mx-3 mb-3">No workitems match those filters.</div>
+    </section>
+    <p class="footer-note">Mockup data · 8 phases · status states flow left to right · cards show the current assignee.</p>
+  </main>
+
+  <script>
+    const statuses = [
+      { id: 'todo', label: 'To Do', color: '#7b879a', soft: '#eef1f5' },
+      { id: 'ongoing', label: 'On-going', color: '#3d77d2', soft: '#eaf1ff' },
+      { id: 'ready', label: 'Ready for Testing', color: '#c87b16', soft: '#fff3e4' },
+      { id: 'testing', label: 'Testing', color: '#9b62bd', soft: '#f5ecfb' },
+      { id: 'approval', label: 'For Approval', color: '#d55b72', soft: '#fdebef' },
+      { id: 'done', label: 'Done', color: '#48a277', soft: '#eaf7f0' }
+    ];
+
+    const phases = [
+      { id: 'planning', number: '01', name: 'Planning', description: 'Frame the work, align the team, and set the delivery direction.', tone: '#6857d8', soft: '#eeecff', health: 'On track', items: [
+        ['Define project goals', 'todo', 'Maya', 'high'], ['Stakeholder map', 'ongoing', 'Noor', 'medium'], ['Prioritize project risks', 'ready', 'Ethan', 'medium'], ['Planning brief', 'approval', 'Lina', ''], ['Stakeholder kickoff', 'ongoing', 'Aiden', '']
+      ] },
+      { id: 'requirements', number: '02', name: 'Requirements', description: 'Turn stakeholder needs into clear, testable outcomes.', tone: '#d55b72', soft: '#fdebef', health: 'On track', items: [
+        ['Capture business needs', 'todo', 'Sora', 'medium'], ['Acceptance criteria', 'ongoing', 'Maya', ''], ['Requirements walkthrough', 'done', 'Diego', 'high'], ['Requirements baseline', 'done', 'Lina', '']
+      ] },
+      { id: 'system-design', number: '03', name: 'System Design', description: 'Shape the architecture, data flows, and technical decisions.', tone: '#3d77d2', soft: '#eaf1ff', health: 'On track', items: [
+        ['Architecture outline', 'todo', 'Omar', 'medium'], ['Data model draft', 'approval', 'Priya', ''], ['Security review', 'ready', 'Kai', 'high'], ['Design approval', 'approval', 'Ethan', 'medium']
+      ] },
+      { id: 'implementation-plan', number: '04', name: 'Implementation plan', description: 'Break the design into sequenced work the team can deliver.', tone: '#149b91', soft: '#e4f7f4', health: 'On track', items: [
+        ['Sprint breakdown', 'todo', 'Aiden', ''], ['Dependency map', 'ongoing', 'Noor', 'medium'], ['Technical plan', 'done', 'Jules', 'high'], ['Plan approval', 'done', 'Maya', '']
+      ] },
+      { id: 'implementation', number: '05', name: 'Implementation', description: 'Build the core experience in small, reviewable increments.', tone: '#c87b16', soft: '#fff3e4', health: 'On track', items: [
+        ['Build core module', 'ongoing', 'Diego', 'high'], ['Integration contract', 'ready', 'Sora', ''], ['QA handoff', 'ready', 'Lina', 'medium'], ['Release candidate', 'testing', 'Omar', ''], ['Build pipeline alerts', 'todo', 'Jules', 'medium']
+      ] },
+      { id: 'testing', number: '06', name: 'Testing', description: 'Validate behavior, accessibility, and readiness for release.', tone: '#9b62bd', soft: '#f5ecfb', health: 'On track', items: [
+        ['Test strategy', 'todo', 'Priya', 'medium'], ['Execute regression suite', 'testing', 'Kai', 'high'], ['Defect triage', 'testing', 'Maya', ''], ['Test sign-off', 'approval', 'Ethan', 'medium']
+      ] },
+      { id: 'deployment', number: '07', name: 'Deployment', description: 'Move the release safely through staging and into production.', tone: '#3d77d2', soft: '#eaf1ff', health: 'On track', items: [
+        ['Deployment checklist', 'todo', 'Noor', ''], ['Staging rehearsal', 'ongoing', 'Aiden', 'medium'], ['Production validation', 'ready', 'Jules', 'high'], ['Go-live approval', 'approval', 'Sora', '']
+      ] },
+      { id: 'maintenance', number: '08', name: 'Maintenance', description: 'Monitor outcomes, resolve issues, and keep the system healthy.', tone: '#149b91', soft: '#e4f7f4', health: 'On track', items: [
+        ['Backlog follow-ups', 'ongoing', 'Omar', ''], ['Monitor production', 'testing', 'Lina', 'medium'], ['Patch planning', 'ready', 'Priya', ''], ['Maintenance sign-off', 'done', 'Diego', ''], ['Patch validation', 'ready', 'Noor', '']
+      ] }
+    ];
+
+    const avatar = name => name.slice(0, 1).toUpperCase();
+    const getStatus = id => statuses.find(status => status.id === id);
+
+    function renderBoard() {
+      const accordion = document.getElementById('phaseAccordion');
+      accordion.innerHTML = phases.map((phase, phaseIndex) => {
+        const itemCount = phase.items.length;
+        const needTesting = phase.items.filter(item => item[1] === 'ready').length;
+        const needApproval = phase.items.filter(item => item[1] === 'approval').length;
+        const hasTesting = phase.items.some(item => item[1] === 'testing');
+        const phaseStatus = needTesting && needApproval ? 'Needs review' : needTesting ? 'Needs testing' : needApproval ? 'Needs approval' : hasTesting ? 'Needs review' : phase.health;
+        const summaryChips = [
+          needTesting ? `<span class="summary-chip testing">${needTesting} need testing</span>` : '',
+          needApproval ? `<span class="summary-chip approval">${needApproval} need approval</span>` : ''
+        ].join('');
+        const columns = statuses.map(status => {
+          const cards = phase.items.filter(item => item[1] === status.id).map(item => {
+            const [name, statusId, assignee, priority] = item;
+            const current = getStatus(statusId);
+            const code = `${phase.number}-${String(phase.items.indexOf(item) + 1).padStart(2, '0')}`;
+            return `<article class="work-card" data-name="${name.toLowerCase()}" data-assignee="${assignee}" style="--status-color:${current.color};--status-soft:${current.soft}">
+              <div class="work-top"><span class="work-code">WI-${code}</span><span class="priority ${priority}" aria-label="${priority || 'normal'} priority"></span></div>
+              <div class="work-name">${name}</div>
+              <div class="work-meta"><span class="status-pill">${current.label}</span><span class="assignee"><span class="avatar">${avatar(assignee)}</span>${assignee}</span></div>
+            </article>`;
+          }).join('');
+          return `<section class="status-column" data-phase="${phase.id}" data-status="${status.id}">
+            <div class="status-head"><div class="status-name" style="--status-color:${status.color}"><span class="status-dot"></span>${status.label}</div><span class="status-count">${cards ? phase.items.filter(item => item[1] === status.id).length : 0}</span></div>
+            <div class="cards">${cards}</div><div class="empty-state">No matching workitems</div>
+          </section>`;
+        }).join('');
+        return `<div class="accordion-item" style="--phase-color:${phase.tone};--phase-soft:${phase.soft}">
+          <h2 class="accordion-header" id="heading-${phase.id}">
+            <button class="accordion-button ${phaseIndex > 0 ? 'collapsed' : ''}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${phase.id}" aria-expanded="${phaseIndex === 0}" aria-controls="collapse-${phase.id}">
+              <span class="phase-index">${phase.number}</span><span class="phase-main"><span class="phase-name">${phase.name}</span><span class="phase-description d-block">${phase.description}</span></span>
+              <span class="phase-summary"><span class="summary-chip">${itemCount} workitems</span>${summaryChips}<span class="summary-chip health">${phaseStatus}</span></span>
+            </button>
+          </h2>
+          <div id="collapse-${phase.id}" class="accordion-collapse collapse ${phaseIndex === 0 ? 'show' : ''}" aria-labelledby="heading-${phase.id}">
+            <div class="accordion-body"><div class="kanban-scroll"><div class="kanban-grid">${columns}</div></div></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function applyFilters() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const assignee = document.getElementById('assigneeFilter').value;
+      let visibleCards = 0;
+      document.querySelectorAll('.status-column').forEach(column => {
+        let columnVisible = 0;
+        column.querySelectorAll('.work-card').forEach(card => {
+          const matches = (!query || card.dataset.name.includes(query)) && (assignee === 'all' || card.dataset.assignee === assignee);
+          card.style.display = matches ? '' : 'none';
+          if (matches) columnVisible++;
+        });
+        column.querySelector('.status-count').textContent = columnVisible;
+        column.querySelector('.empty-state').style.display = columnVisible ? 'none' : 'block';
+        visibleCards += columnVisible;
+      });
+      document.getElementById('noResults').style.display = visibleCards ? 'none' : 'block';
+    }
+
+    renderBoard();
+    const assignees = [...new Set(phases.flatMap(phase => phase.items.map(item => item[2])))].sort();
+    document.getElementById('assigneeFilter').insertAdjacentHTML('beforeend', assignees.map(name => `<option value="${name}">${name}</option>`).join(''));
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('assigneeFilter').addEventListener('change', applyFilters);
+    console.assert(phases.length === 8 && statuses.length === 6, 'Mockup seed should contain eight phases and six status states.');
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
