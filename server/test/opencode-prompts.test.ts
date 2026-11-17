@@ -1,8 +1,7 @@
-// OpenCode prompt port tests (bridge.mjs:86-92 port) + the byte-identical
-// wake-prompt contract (bridge.mjs:94, 114-118). Upstream is a fake — no live
+// OpenCode prompt port tests (bridge.mjs:86-92 port, retired on main in
+// 809440a) + the byte-identical wake-prompt contract (bridge.mjs:94, 114-118),
+// now pinned against the adapter's own constant. Upstream is a fake — no live
 // server, and never a real prompt to a real session.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { OpenCodeRequestError, type OpenCodeHttpClient } from '../src/integrations/opencode/client.js';
 import { createOpenCodeClient } from '../src/integrations/opencode/client.js';
@@ -91,18 +90,6 @@ describe('wake-prompt bytes (bridge.mjs:94, 114-118 — MUST stay byte-identical
       '[2026-11-17T10:00:01.000Z] [from: devx] [to: all] hi there\n' +
       '[2026-11-17T10:00:02.000Z] [from: legacy] [to: null] no receiver',
     );
-  });
-
-  it('stays byte-identical to the WAKE_PROMPT source in bridge.mjs itself', () => {
-    // Reads the REAL bridge source in the worktree and extracts its constant,
-    // so any drift fails loudly instead of relying on a transcribed literal.
-    const source = readFileSync(fileURLToPath(new URL('../../bridge.mjs', import.meta.url)), 'utf8');
-    const match = /const WAKE_PROMPT = ("(?:[^"\\]|\\.)*");/.exec(source);
-    expect(match, 'WAKE_PROMPT literal not found in bridge.mjs').not.toBeNull();
-    expect(JSON.parse(match?.[1] ?? '""')).toBe(WAKE_PROMPT);
-    // And the composition template fragment exists verbatim (prompt + "\n\n").
-    expect(source).toContain('WAKE_PROMPT +');
-    expect(source).toContain('"\\n\\n" +');
   });
 
   it('marker lines parse back (compose/parse symmetry, assessment §6)', () => {

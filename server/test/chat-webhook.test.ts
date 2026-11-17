@@ -1,15 +1,14 @@
-// POST /webhook — legacy capture path equivalence (bridge.mjs:342-363):
-// field-by-field save semantics compared against openStore() itself, the
-// bridge's exact error texts inside the shared envelope, and the wake path
-// invoked with the byte-identical wake prompt (same wake as the reply capture
-// — reused from ChatService, not duplicated). No live OpenCode calls.
+// POST /webhook — legacy capture path pins (bridge.mjs:342-363 semantics,
+// retired on main in 809440a): field-by-field save semantics, the bridge's
+// exact error texts inside the shared envelope, and the wake path invoked
+// with the byte-identical wake prompt (same wake as the reply capture —
+// reused from ChatService, not duplicated). No live OpenCode calls.
 //
 // The wake is fire-and-forget (bridge.mjs:357 does not await it), so tests do
 // NOT sleep-and-hope: they poll for the wake's LAST observable action — the
 // bookmark advance (bridge.mjs:124) or, on the skip path, the skip log
 // (bridge.mjs:104) — before closing the app or asserting on it.
 import Database from 'better-sqlite3';
-import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,16 +18,6 @@ import { ChatMessageRepository } from '../src/modules/chat/infrastructure/messag
 import { WAKE_PROMPT } from '../src/integrations/opencode/prompts.js';
 import { makeConfig, tempDir } from './helpers.js';
 import { fakeOpenCode } from './chat-fakes.js';
-
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-const { openStore } = require('../../store.mjs') as {
-  openStore: (file?: string) => {
-    insert: (row: { ts: string; from: unknown; to: unknown; body: string; sessionId?: unknown }) => { id: number };
-    query: (params?: { view?: string }) => { rows: Array<{ id: number; time: string; from: unknown; to: unknown; text: string }> };
-    close: () => void;
-  };
-};
 
 interface Ctx {
   app: FastifyInstance;
@@ -76,7 +65,7 @@ function bookmarkId(db: Database.Database): number | null {
 }
 
 describe('POST /webhook (bridge.mjs:342-363)', () => {
-  it('valid payload → 200 {status:"ok"}; the row persists with the legacy openStore() field semantics', async () => {
+  it('valid payload → 200 {status:"ok"}; the row persists with the bridge field semantics (transcribed from bridge.mjs:350-355)', async () => {
     const ctx = setup();
     try {
       await ctx.app.ready();
@@ -84,15 +73,9 @@ describe('POST /webhook (bridge.mjs:342-363)', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ status: 'ok' });
 
-      // Legacy semantics: the bridge's save is
-      //   saveMessage({ from: from || "unknown", to: null, body: text, sessionId: null })
-      //   → store.insert({ ts: ISO-now, from, to, body, sessionId })   (bridge.mjs:42-43,350-355)
-      // Run the SAME input through openStore() and compare read-back rows.
-      const legacyPath = join(tempDir(), 'legacy.db');
-      const legacy = openStore(legacyPath);
-      legacy.insert({ ts: '2026-11-17T10:00:00.000Z', from: 'greg', to: null, body: 'hi there', sessionId: null });
-      const expected = legacy.query().rows[0];
-      legacy.close();
+      // Bridge save semantics (bridge.mjs:42-43,350-355): from || "unknown",
+      // to: null, body trimmed, sessionId: null — the wire row must match.
+      const expected = { from: 'greg', to: null, text: 'hi there' };
 
       const db = ctx.openDb();
       try {
@@ -104,7 +87,7 @@ describe('POST /webhook (bridge.mjs:342-363)', () => {
 
         // Field-by-field: receiver NULL, session_id NULL, body TRIMMED, sender
         // as given; ts is ISO-now (format + freshness), not a fixture value.
-        expect(row).toEqual({ ...expected, time: row.time });
+        expect(row).toEqual({ ...expected, id: row?.id, time: row.time });
         expect(row?.time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
         expect(Math.abs(Date.now() - new Date(row?.time ?? '').getTime())).toBeLessThan(5000);
         const raw = db.prepare('SELECT sender, receiver, body, session_id FROM messages ORDER BY id DESC LIMIT 1').get();
@@ -216,7 +199,7 @@ describe('POST /webhook (bridge.mjs:342-363)', () => {
     }
   });
 
-  it('from truthiness (bridge.mjs:351): falsy → "unknown"; truthy number saved AS-IS via TEXT affinity (verified vs the real store); unbindable → blanket-catch 400', async () => {
+  it('from truthiness (bridge.mjs:351): falsy → "unknown"; truthy number saved AS-IS via TEXT affinity ("123.0"); unbindable → blanket-catch 400', async () => {
     const ctx = setup();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -228,14 +211,10 @@ describe('POST /webhook (bridge.mjs:342-363)', () => {
       const numeric = await ctx.app.inject({ method: 'POST', url: '/webhook', payload: { from: 123, message: 'numeric sender' } });
       expect(numeric.statusCode).toBe(200);
 
-      // Real-store verification (ruling): run the SAME truthy-number payload
-      // through openStore() and compare — both drivers coerce 123 → '123.0'.
-      const legacyPath = join(tempDir(), 'legacy-from.db');
-      const legacy = openStore(legacyPath);
-      legacy.insert({ ts: '2026-11-17T10:00:00.000Z', from: 123, to: null, body: 'numeric sender' });
-      const legacyRow = legacy.query().rows[0];
-      expect(legacyRow.from).toBe('123.0'); // TEXT affinity, both drivers
-      legacy.close();
+      // Truthy non-string senders: SQLite TEXT affinity (legacy store.mjs
+      // schema, deleted on main in 809440a) coerces the number 123 → '123.0'
+      // — the value is passed through AS-IS by the repository, and the
+      // column's TEXT affinity does the coercion (same for both drivers).
 
       // Values BOTH drivers reject binding (objects) → save failure → the
       // bridge's blanket catch (:350-361) → 400 "Invalid JSON", row not saved.
@@ -249,7 +228,7 @@ describe('POST /webhook (bridge.mjs:342-363)', () => {
         const rows = db.prepare('SELECT sender, body FROM messages ORDER BY id').all() as Array<{ sender: string; body: string }>;
         expect(rows).toEqual([
           { sender: 'unknown', body: 'null sender' },
-          { sender: legacyRow.from, body: 'numeric sender' }, // as-is pass-through == the real store's coercion
+          { sender: '123.0', body: 'numeric sender' }, // TEXT affinity coercion, as-is pass-through
         ]);
       } finally {
         db.close();
