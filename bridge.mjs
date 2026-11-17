@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { openStore } from "./store.mjs";
+import { listLocalProjects } from "./local-projects.mjs";
+import { pathToFileURL } from "node:url";
 
 const CONFIG_FILE = "./agents.json";
 const WEBHOOK_PORT = 3005;
@@ -326,11 +328,14 @@ const server = http.createServer(async (req, res) => {
     req.method === "GET" &&
     new URL(req.url, "http://x").pathname === "/api/local-projects"
   ) {
-    const entries = await fs.readdir("./projects", { withFileTypes: true });
-    json(
-      200,
-      entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name),
-    );
+    // Controlled failure: never let a readdir rejection escape the handler
+    // and crash the bridge (live bridge must survive a broken projects dir).
+    try {
+      json(200, await listLocalProjects("./projects"));
+    } catch (err) {
+      console.error("[Bridge] /api/local-projects failed:", err.message);
+      json(500, { error: err.message });
+    }
     return;
   }
 
@@ -440,9 +445,20 @@ const server = http.createServer(async (req, res) => {
   json(404, { error: "not found" });
 });
 
-server.listen(WEBHOOK_PORT, () => {
-  console.log(
-    `[Bridge] Listening on http://localhost:${WEBHOOK_PORT}/webhook, /send, /prompt and /ui`,
+// Listen only when launched as a script: importing this module (tests, tools)
+// must never bind port 3005 against the live bridge.
+const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (import.meta.url === entry) {
+  server.listen(WEBHOOK_PORT, () => {
+    console.log(
+      `[Bridge] Listening on http://localhost:${WEBHOOK_PORT}/webhook, /send, /prompt and /ui`,
+    );
+    listenEvents();
+  });
+} else if (process.argv[1]) {
+  // Launched as a script but THIS module isn't the entry (symlink/wrapper
+  // alias): the bridge would sit there serving nothing — make it loud.
+  console.error(
+    "[Bridge] WARNING: launched in an unexpected way (symlink/wrapper?); not listening. Start with: node bridge.mjs",
   );
-  listenEvents();
-});
+}
