@@ -1,6 +1,7 @@
 ﻿
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -10,14 +11,26 @@ const LOCAL_CONTEXT_DIR = './.memory/boss';
 const LOCAL_CONTEXT = path.join(LOCAL_CONTEXT_DIR, 'local-context.md');
 const LOCAL_CONTEXT_EXAMPLE = path.join(LOCAL_CONTEXT_DIR, 'local-context.example.md');
 
+const FIX = process.argv.includes('--fix');
+
 const report = [];
-const upgrade = [];   // upgrade-path guidance (existing installs)
 let failed = false;
 let existingInstall = false;
 
 function check(name, ok, detail = '') {
   report.push(`${ok ? 'OK  ' : 'FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
   if (!ok) failed = true;
+}
+
+// Is something listening on the production port? (shared by plain-mode
+// checks and the --fix pre-flight so the two cannot drift)
+function probe3005() {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port: 3005, timeout: 1500 });
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('error', () => resolve(false));
+    socket.once('timeout', () => { socket.destroy(); resolve(false); });
+  });
 }
 
 // 1. Prerequisites
@@ -58,59 +71,54 @@ try {
   report.push('DONE created ./projects (gitignored - place project workspaces here)');
 }
 
-// 3. Existing install - upgrade-path checks (READ-ONLY: this script never
+// 3. Install checks (existing installs) - READ-ONLY: this script never
 // touches your agents.json, your database, or any runtime state; it only
-// reports what the post-migration architecture needs)
-if (existingInstall) {
-  // 3a. Order of operations - the retired legacy bridge may still be running
+// reports what the post-migration architecture needs. Shared by plain mode
+// and --fix (identical lines, single source).
+async function runChecks() {
+  const lines = [];
+  // Order of operations - the retired legacy bridge may still be running
   // (the pull deleted bridge.mjs but a running process survives it, holding
   // port 3005). Stop it BEFORE backing up or starting the new server.
-  let port3005Busy = false;
-  try {
-    const net = await import('node:net');
-    port3005Busy = await new Promise((resolve) => {
-      const socket = net.connect({ host: '127.0.0.1', port: 3005, timeout: 1500 });
-      socket.once('connect', () => { socket.destroy(); resolve(true); });
-      socket.once('error', () => resolve(false));
-      socket.once('timeout', () => { socket.destroy(); resolve(false); });
-    });
-  } catch { /* probe failure = treat as free */ }
-  upgrade.push(port3005Busy
-    ? 'ACTION port 3005 is IN USE - likely the retired legacy bridge still running (node bridge.mjs). Stop it first: it survives the pull and would block the new server.'
-    : 'OK   port 3005 is free - the new server can bind it');
-  upgrade.push('ORDER 1) stop the legacy bridge if running  2) back up .data\\messages.db (+ any -wal/-shm sidecars)  3) npm install  4) npm run build -w web  5) start the new server (README "Running")');
+  if (await probe3005()) {
+    lines.push('ACTION port 3005 is IN USE - likely the retired legacy bridge still running (node bridge.mjs). Stop it first: it survives the pull and would block the new server.');
+  } else {
+    lines.push('OK   port 3005 is free - the new server can bind it');
+  }
+  lines.push('ORDER 1) stop the legacy bridge if running  2) back up .data\\messages.db (+ any -wal/-shm sidecars)  3) npm install  4) npm run build -w web  5) start the new server (README "Running")');
 
-  // 3b. Workspaces installed? (server deps hoisted to root node_modules)
+  // Workspaces installed? (server deps hoisted to root node_modules)
   const depsInstalled = fsSync.existsSync('./node_modules/fastify') && fsSync.existsSync('./node_modules/next') && fsSync.existsSync('./node_modules/.package-lock.json');
-  upgrade.push(depsInstalled
+  lines.push(depsInstalled
     ? 'OK   npm workspaces installed (server/ + web/ deps present)'
     : 'TODO npm install   - required: the new architecture needs the server/ and web/ workspaces (a stale pre-migration node_modules is replaced by this)');
 
-  // 3c. Dashboard built?
-  upgrade.push(fsSync.existsSync('./web/out/index.html')
+  // Dashboard built?
+  lines.push(fsSync.existsSync('./web/out/index.html')
     ? 'OK   dashboard built (web/out/index.html present)'
     : 'TODO npm run build -w web   - without it the dashboard at /ui returns 404');
 
-  // 3d. Message store - backup reminder (migrations apply automatically at
+  // Message store - backup reminder (migrations apply automatically at
   // first server start; the backup is for peace of mind, not a requirement -
   // and only safe to take once the legacy bridge has STOPPED writing)
-  upgrade.push(fsSync.existsSync('./.data/messages.db')
+  lines.push(fsSync.existsSync('./.data/messages.db')
     ? 'NOTE .data/messages.db found - schema migrations apply automatically at the first server start (additive, existing rows untouched). Take a backup copy AFTER stopping the legacy bridge (a copy taken while it runs can miss WAL-buffered rows).'
     : 'NOTE no .data/messages.db yet - the store is created on first start');
 
-  // 3e. Legacy leftovers that survive the pull (gitignored)
+  // Legacy leftovers that survive the pull (gitignored)
   if (fsSync.existsSync('./dist')) {
-    upgrade.push('NOTE ./dist exists - legacy Vite build output, gitignored, unused by the new stack. Safe to delete.');
+    lines.push('NOTE ./dist exists - legacy Vite build output, gitignored, unused by the new stack. Safe to delete.');
   }
 
-  // 3f. Registry shape - read-only sanity report (never modified)
+  // Registry shape - read-only sanity report (never modified)
   try {
     const reg = JSON.parse(await fs.readFile(REGISTRY, 'utf8'));
     const count = Array.isArray(reg.agents) ? reg.agents.length : 0;
-    upgrade.push(`OK   agents.json parses - ${count} agent entr${count === 1 ? 'y' : 'ies'} registered (your config is never modified by setup)`);
+    lines.push(`OK   agents.json parses - ${count} agent entr${count === 1 ? 'y' : 'ies'} registered (your config is never modified by setup)`);
   } catch {
-    upgrade.push(`WARN ${REGISTRY} is not valid JSON - check it manually; setup never edits your registry file`);
+    lines.push(`WARN ${REGISTRY} is not valid JSON - check it manually; setup never edits your registry file`);
   }
+  return lines;
 }
 
 // 4. Verify local OpenCode service
@@ -125,9 +133,74 @@ if (svc.status === 0 && /^https?:\/\//.test(url)) {
 console.log('\n=== Agents-Lobby setup ===');
 for (const line of report) console.log(line);
 
-if (existingInstall && upgrade.length) {
-  console.log('\n--- Install checks (existing agents.json - upgrade guidance) ---');
-  for (const line of upgrade) console.log(line);
+if (FIX) {
+  // --fix: the ORDER line, executed for its safe steps. Stopping a process
+  // and starting the long-lived server stay human (kill-unknown-owner and
+  // keep-alive-forever are not script jobs).
+  if (failed) {
+    console.log('FAIL prerequisites not met - fix the FAIL lines above before running --fix');
+    process.exit(1);
+  }
+  if (await probe3005()) {
+    console.log('ACTION port 3005 is IN USE - stop the process holding it, then re-run: node setup.mjs --fix');
+    process.exit(0);
+  }
+
+  // Backup (sidecar-safe, cutover-runbook pattern): copy main + sidecars
+  // RENAMED to the backup base, fold the WAL into the copy, verify, drop
+  // the sidecar copies. "Alongside" copying would silently lose WAL rows.
+  if (fsSync.existsSync('./.data/messages.db')) {
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHMMSS, colon-free, no trailing dot
+    const bak = `.data/messages.db.bak-${stamp}`;
+    fsSync.copyFileSync('./.data/messages.db', bak);
+    for (const s of ['-wal', '-shm']) {
+      if (fsSync.existsSync(`./.data/messages.db${s}`)) fsSync.copyFileSync(`./.data/messages.db${s}`, bak + s);
+    }
+    const { DatabaseSync } = await import('node:sqlite');
+    const c = new DatabaseSync(bak);
+    c.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    const row = c.prepare('PRAGMA integrity_check').get();
+    c.close();
+    for (const s of ['-wal', '-shm']) fsSync.rmSync(bak + s, { force: true });
+    if (row.integrity_check !== 'ok') {
+      console.log(`FAIL backup copy failed integrity check (${row.integrity_check}) - aborting before any install`);
+      process.exit(1);
+    }
+    console.log(`DONE backup ${bak} (integrity: ok)`);
+  } else {
+    console.log('NOTE no .data/messages.db yet - nothing to back up');
+  }
+
+  const run = (args, what) => {
+    const r = spawnSync('npm', args, { stdio: 'inherit', shell: true });
+    if (r.status !== 0) {
+      console.log(`FAIL ${what} (exit code ${r.status ?? 1}) - fix the error above, then re-run: node setup.mjs --fix`);
+      process.exit(1);
+    }
+  };
+  run(['install'], 'npm install');
+  run(['run', 'build', '-w', 'web'], 'npm run build -w web');
+
+  console.log('\n--- Post-fix checks ---');
+  for (const line of await runChecks()) console.log(line);
+
+  // Final human step - fresh-clone-aware: a fresh clone must edit its
+  // registry before starting (plain mode's guidance, not silently skipped).
+  if (!existingInstall) {
+    console.log('\nNext: edit agents.json - replace the template session IDs with real ones (see agents.example.json).');
+  }
+  console.log('Then start the server (README "Running"):');
+  console.log("  $env:LOBBY_PORT='3005'; $env:LOBBY_DB_PATH='.data/messages.db'");
+  console.log('  npx tsx server/src/server.ts');
+  process.exit(0);
+}
+
+if (existingInstall) {
+  const upgrade = await runChecks();
+  if (upgrade.length) {
+    console.log('\n--- Install checks (existing agents.json - upgrade guidance) ---');
+    for (const line of upgrade) console.log(line);
+  }
 }
 
 console.log(`
@@ -140,4 +213,3 @@ ${existingInstall
   2. Start the server (see README "Running"):  npx tsx server/src/server.ts`}
 Protocol details: README.md, section "For project-head agents".`);
 process.exit(failed ? 1 : 0);
-
