@@ -1,0 +1,146 @@
+// Zod-validated config. A fresh clone runs with NO env vars, NO .data/,
+// NO agents.json — every value has a safe dev default.
+//
+// Environment variables (all optional):
+//   LOBBY_HOST                  Bind address. Default `127.0.0.1` (local trusted
+//                               environment — decision 4).
+//   LOBBY_PORT                  Listen port. Default `3006` (decision 5: 3005
+//                               stays the legacy bridge's production port).
+//   LOBBY_BODY_LIMIT            Max request body size in bytes. Default `1048576` (1 MB).
+//   LOBBY_DB_PATH               SQLite database file. Relative paths resolve
+//                               against the process cwd. Default `.data/dev.db`
+//                               (worktree-local, auto-created, gitignored —
+//                               NEVER the canonical `.data/messages.db`).
+//   LOBBY_OPENCODE_TIMEOUT_MS   Upstream OpenCode request timeout in ms.
+//                               Default `30000` (decision 4).
+//   LOBBY_OPENCODE_SERVER_URL   Optional FALLBACK OpenCode server URL for the
+//                               Phase 3 adapter (assessment §7); URL discovery
+//                               via `opencode service status` stays inside the
+//                               adapter. Precedence for the adapter's effective
+//                               URL: discovery > this env var > agents.json
+//                               `serverUrl` (registry fallback wired in app.ts,
+//                               bridge.mjs:31). No default.
+//   LOBBY_REGISTRY_PATH         Path of the agents.json registry (re-read per
+//                               request — bridge-faithful, decision 3). Relative
+//                               paths resolve against the process cwd. Default
+//                               `agents.json`. An ABSENT file is the documented
+//                               fresh-clone state: an empty registry (no boss,
+//                               no agents) so the server runs gracefully; a
+//                               PRESENT-but-malformed file fails the read.
+//   LOBBY_UI_DIR                Root of the static web export served at /ui
+//                               (decision 2). Default: ../web/out next to the
+//                               server package (the `next build` output).
+//   LOBBY_PROJECTS_DIR          Machine-local projects workspace listed by
+//                               GET /api/local-projects (decision-2 compat;
+//                               the Projects module consumes it). Relative
+//                               paths resolve against the process cwd.
+//                               Default `./projects` (bridge.mjs:335).
+//
+// Shared-secret auth is intentionally NOT an env var: the optional bearer
+// token is read from the GITIGNORED file `.data/server.auth.json`
+// (`{ "authToken": "..." }`). Absent file = open local access, matching
+// today's bridge behavior (decision 4). A present-but-empty file, a
+// malformed file, or an empty-token file is a startup error (fail loud —
+// the operator created the file to protect something).
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  LOBBY_HOST: z.string().min(1).default('127.0.0.1'),
+  LOBBY_PORT: z.coerce.number().int().positive().default(3006),
+  LOBBY_BODY_LIMIT: z.coerce.number().int().positive().default(1_048_576),
+  LOBBY_DB_PATH: z.string().min(1).default('.data/dev.db'),
+  LOBBY_OPENCODE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  LOBBY_OPENCODE_SERVER_URL: z.url().optional(),
+  LOBBY_REGISTRY_PATH: z.string().min(1).default('agents.json'),
+  LOBBY_UI_DIR: z.string().min(1).optional(),
+  LOBBY_PROJECTS_DIR: z.string().min(1).default('./projects'),
+});
+
+const authFileSchema = z.object({
+  authToken: z.string().min(1),
+});
+
+export interface AppConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly bodyLimit: number;
+  readonly dbPath: string;
+  /** Undefined when no auth file exists (= open local access, decision 4). */
+  readonly authToken?: string;
+  readonly opencodeTimeoutMs: number;
+  readonly opencodeServerUrl?: string;
+  /** agents.json path (re-read per request; absent file = empty registry). */
+  readonly registryPath: string;
+  /** Static web export root served at /ui (decision 2). */
+  readonly uiDir?: string;
+  /** Machine-local projects workspace root for /api/local-projects. */
+  readonly projectsDir: string;
+}
+
+export const DEFAULT_AUTH_FILE = '.data/server.auth.json';
+
+export function loadConfig(
+  opts: { env?: Record<string, string | undefined>; authFile?: string } = {},
+): AppConfig {
+  const env = envSchema.parse(opts.env ?? process.env);
+
+  let authToken: string | undefined;
+  const authFile = opts.authFile ?? DEFAULT_AUTH_FILE;
+  let raw: string;
+  let present: boolean;
+  try {
+    raw = readFileSync(authFile, 'utf8');
+    present = true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(`Cannot read auth config file ${authFile}: ${String(err)}`);
+    }
+    // Absent file = open local access (documented decision 4).
+    present = false;
+    raw = '';
+  }
+  if (present && raw.trim() === '') {
+    // An EXISTING empty/whitespace-only file is not the same as absent: the
+    // operator created the file to protect something — fail loud instead of
+    // silently running the server open.
+    throw new Error(
+      `Auth config file ${authFile} exists but is empty — write {"authToken": "..."} or delete the file for open access (decision 4)`,
+    );
+  }
+  if (raw.trim() !== '') {
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      throw new Error(`Auth config file ${authFile} is malformed (expected {"authToken": "..."}): not valid JSON`);
+    }
+    const parsed = authFileSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new Error(
+        `Auth config file ${authFile} is malformed (expected {"authToken": "..."}): ${parsed.error.issues[0]?.message ?? 'invalid'}`,
+      );
+    }
+    authToken = parsed.data.authToken;
+  }
+
+  const config: {
+    -readonly [K in keyof AppConfig]: AppConfig[K];
+  } = {
+    host: env.LOBBY_HOST,
+    port: env.LOBBY_PORT,
+    bodyLimit: env.LOBBY_BODY_LIMIT,
+    dbPath: env.LOBBY_DB_PATH,
+    opencodeTimeoutMs: env.LOBBY_OPENCODE_TIMEOUT_MS,
+    registryPath: env.LOBBY_REGISTRY_PATH,
+    projectsDir: env.LOBBY_PROJECTS_DIR,
+  };
+  if (authToken !== undefined) config.authToken = authToken;
+  if (env.LOBBY_OPENCODE_SERVER_URL !== undefined) {
+    config.opencodeServerUrl = env.LOBBY_OPENCODE_SERVER_URL;
+  }
+  if (env.LOBBY_UI_DIR !== undefined) {
+    config.uiDir = env.LOBBY_UI_DIR;
+  }
+  return Object.freeze(config);
+}

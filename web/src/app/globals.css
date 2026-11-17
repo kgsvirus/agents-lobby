@@ -1,0 +1,4 @@
+/* Tailwind v4 — same setup as the legacy app's src/index.css. */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));

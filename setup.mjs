@@ -18,7 +18,7 @@ function check(name, ok, detail = '') {
 
 // 1. Prerequisites
 const nodeMajor = Number(process.versions.node.split('.')[0]);
-check('Node >= 18', nodeMajor >= 18, `found ${process.versions.node}`);
+check('Node >= 24', nodeMajor >= 24, `found ${process.versions.node}`);
 
 const oc = spawnSync('opencode', ['--version'], { encoding: 'utf8', shell: true });
 const ocOk = oc.status === 0 && (oc.stdout || '').trim().length > 0;

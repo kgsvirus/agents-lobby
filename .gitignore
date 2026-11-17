@@ -26,3 +26,6 @@ desktop.ini
 # Node / build
 node_modules/
 dist/
+web/out/
+web/.next/
+web/next-env.d.ts
