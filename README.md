@@ -79,7 +79,7 @@ node setup.mjs
 
 It performs the mechanical parts of onboarding:
 
-1. Checks prerequisites — Node >= 18 and the `opencode` CLI on PATH.
+1. Checks prerequisites — Node >= 24 and the `opencode` CLI on PATH.
 2. Creates `agents.json` from `agents.example.json` if missing (never
    overwrites an existing one).
 3. Creates the gitignored `projects/` workstation folder.
