@@ -15,6 +15,16 @@ import { WAKE_PROMPT } from '../src/integrations/opencode/prompts.js';
 import { makeConfig, tempDir } from './helpers.js';
 import { fakeOpenCode } from './chat-fakes.js';
 
+// The wake is async (registry re-read + IO) — wait for the condition instead
+// of a fixed sleep, which flakes on slow filesystems (exFAT canonical).
+async function until(probe: () => boolean, what: string, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!probe()) {
+    if (Date.now() > deadline) throw new Error(`timeout waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
 interface Ctx {
   app: FastifyInstance;
   opencode: ReturnType<typeof fakeOpenCode>;
@@ -429,7 +439,7 @@ describe('chat sink wiring through the composition root', () => {
       await ctx.opencode.deliver({
         kind: 'reply', from: 'taskflow', to: null, body: 'phase done', sessionId: 'ses_taskflow', ts: '2026-11-17T10:00:00.000Z',
       });
-      await new Promise((r) => setTimeout(r, 5));
+      await until(() => ctx.opencode.promptCalls.length === 1, 'the coalesced boss wake');
       expect(ctx.opencode.promptCalls).toHaveLength(1);
       expect(ctx.opencode.promptCalls[0]?.sessionId).toBe('ses_boss');
       // Slice carries the reply; byte-identical format.
