@@ -59,7 +59,7 @@ const url = (svc.stdout || '').trim().split(/\r?\n/)[0];
 if (svc.status === 0 && /^https?:\/\//.test(url)) {
   report.push(`OK   OpenCode service reachable at ${url}`);
 } else {
-  report.push('WARN OpenCode service not reachable (the bridge needs it running)');
+  report.push('WARN OpenCode service not reachable (the server needs it running)');
 }
 
 console.log('\n=== Agents-Lobby setup ===');
@@ -68,6 +68,6 @@ console.log(`
 Next steps:
   1. Edit agents.json: replace the template session IDs with real ones
      (name, project, session - see agents.example.json for the shape).
-  2. Start the bridge:  node bridge.mjs
+  2. Start the server (see README "Running"):  npx tsx server/src/server.ts
 Protocol details: README.md, section "For project-head agents".`);
 process.exit(failed ? 1 : 0);
