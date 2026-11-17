@@ -1,34 +1,11 @@
-// Chat application — boss wake equivalence (bridge.mjs:98-130 port):
-// BYTE-IDENTICAL slice text, coalescing skip, bookmark-advances-only-through-
-// the-slice semantics, empty-slice → bare wake prompt with NO bookmark move,
-// and failure isolation. Fixtures cross-checked against the bridge's own
-// source and, for the realistic dataset, against openStore() itself.
-import { createRequire } from 'node:module';
-import { copyFileSync, existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Chat application — boss wake pins (bridge.mjs:98-130 semantics, retired on
+// main in 809440a): BYTE-IDENTICAL slice text, coalescing skip, bookmark-
+// advances-only-through-the-slice semantics, empty-slice → bare wake prompt
+// with NO bookmark move, and failure isolation — all against the NEW stack.
 import { describe, expect, it, vi } from 'vitest';
 import { WAKE_PROMPT } from '../src/integrations/opencode/prompts.js';
 import { wakeSliceRows } from '../src/modules/chat/domain/message.js';
-import { openDatabase, runMigrations, migrationsFolder } from '../src/infrastructure/database/client.js';
-import { EventBus } from '../src/infrastructure/events/bus.js';
-import { ChatMessageRepository } from '../src/modules/chat/infrastructure/message-repository.js';
-import { ChatService } from '../src/modules/chat/application/chat-service.js';
-import { exampleRegistry, fakeOpenCode, fakeRegistry, makeChatFixture } from './chat-fakes.js';
-import { tempDir } from './helpers.js';
-
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-const { openStore } = require('../../store.mjs') as {
-  openStore: (file?: string) => {
-    insert: (row: { ts: string; from: string; to: string | null; body: string }) => { id: number };
-    unread: (consumer?: string) => Array<{ id: number; time: string; from: string; to: string | null; text: string }>;
-    markSeen: (consumer?: string, throughId?: number) => void;
-    close: () => void;
-  };
-};
-
-const canonicalCopyPath = join(dirname(fileURLToPath(import.meta.url)), '..', '.data', 'verify-copy.db');
+import { exampleRegistry, fakeRegistry, makeChatFixture } from './chat-fakes.js';
 
 /** Rows that exercise every slice filter (fixture derived from bridge.mjs's
  *  wakeBoss filter: exclude from === 'boss', exclude human → boss). */
@@ -50,11 +27,9 @@ function seedWakeFixture(fixture: ReturnType<typeof makeChatFixture>): void {
   }
 }
 
-describe('wake slice — byte-identical with bridge.mjs (bridge.mjs:98-130)', () => {
-  it('the slice filter excludes exactly what the bridge excludes (transcribed from source)', () => {
-    // bridge.mjs:113 verbatim filter logic: from !== 'boss' && !(from === 'human' && to === 'boss')
-    const source = readFileSync(fileURLToPath(new URL('../../bridge.mjs', import.meta.url)), 'utf8');
-    expect(source).toContain(".filter((r) => r.from !== \"boss\" && !(r.from === \"human\" && r.to === \"boss\"))");
+describe('wake slice — bridge.mjs:98-130 semantics (retired source; new stack only)', () => {
+  it('the slice filter excludes exactly the boss-native rows: boss replies, human → boss, exact-match only', () => {
+    // bridge.mjs:113 semantics (transcribed): from !== 'boss' && !(from === 'human' && to === 'boss')
     const rows = [
       { id: 1, time: 't1', from: 'boss', to: 'human', text: 'own' },
       { id: 2, time: 't2', from: 'human', to: 'boss', text: 'native' },
@@ -153,47 +128,4 @@ describe('wake slice — byte-identical with bridge.mjs (bridge.mjs:98-130)', ()
     await f.service.wakeBoss();
     expect(f.opencode.promptCalls).toEqual([]);
   });
-
-  it.skipIf(!existsSync(canonicalCopyPath))(
-    'the slice text over the canonical copy equals the bridge computation over openStore()',
-    async () => {
-      const dir = tempDir();
-      const copyPath = join(dir, 'wake-copy.db');
-      copyFileSync(canonicalCopyPath, copyPath); // checked-in copy is never mutated
-      // Seed fresh unread rows the way the bridge listener would: an agent →
-      // boss reply and an agent → all broadcast. The canonical copy's unread
-      // state is whatever the live db last had (bookmark advances with real
-      // wakes) — captured here, not hardcoded, so the equivalence holds for
-      // any snapshot of production data.
-      const legacy = openStore(copyPath);
-      legacy.insert({ ts: '2026-11-17T10:00:00.000Z', from: 'ruben', to: 'boss', body: 'newest reply' });
-      legacy.insert({ ts: '2026-11-17T10:00:05.000Z', from: 'greg', to: 'all', body: 'greg broadcast' });
-      const expectedRows = legacy.unread('boss').filter(
-        (r) => r.from !== 'boss' && !(r.from === 'human' && r.to === 'boss'),
-      );
-      const expectedText =
-        WAKE_PROMPT +
-        '\n\n' +
-        expectedRows.map((r) => `[${r.time}] [from: ${r.from}] [to: ${r.to}] ${r.text}`).join('\n');
-      legacy.close();
-
-      // The chat stack over the SAME file (migrations no-op on the legacy schema).
-      const { db, sqlite } = openDatabase(copyPath);
-      runMigrations(db, migrationsFolder());
-      const bus = new EventBus(sqlite);
-      const store = new ChatMessageRepository(sqlite);
-      const opencode = fakeOpenCode();
-      const service = new ChatService({
-        store,
-        registry: fakeRegistry(exampleRegistry()),
-        ports: { prompts: opencode.integration.prompts, sessions: opencode.integration.sessions, bus },
-      });
-      await service.wakeBoss();
-      expect(opencode.promptCalls).toEqual([
-        { sessionId: 'ses_boss', text: expectedText },
-      ]);
-      // …and the bookmark advanced through the slice exactly as the bridge's.
-      expect(store.unread('boss')).toEqual([]);
-    },
-  );
 });

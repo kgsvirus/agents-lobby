@@ -1,15 +1,16 @@
 // Baseline migration verification (decision 6): apply the drizzle baseline to
 // a fresh temp db and compare pragma table_info / index_list against the
 // LEGACY schema — against the one read-only COPY of the canonical
-// .data/messages.db when present, otherwise against a fixture created with
-// the store.mjs DDL. Additionally, the baseline is applied to an ISOLATED
-// copy of that legacy database to prove it can be migrated in place without
-// touching existing tables or data (row counts, MAX(id), wire-alias samples).
+// .data/messages.db when present, otherwise against an inline raw-SQL fixture
+// whose DDL is copied VERBATIM from the retired store.mjs (see
+// LEGACY_SCHEMA_DDL below; the legacy file was deleted on main in 809440a).
+// Additionally, the baseline is applied to an ISOLATED copy of a populated
+// legacy database to prove it can be migrated in place without touching
+// existing tables or data (counts, MAX(id), FULL row-by-row comparison).
 // Tolerated delta (documented inline below): notnull on INTEGER PRIMARY KEY
 // columns (rowid alias — cannot be null under either declaration); the fresh
 // db additionally contains the `events` table.
 import { describe, expect, it } from 'vitest';
-import { createRequire } from 'node:module';
 import { copyFileSync, existsSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { dirname, join } from 'node:path';
@@ -17,15 +18,27 @@ import { fileURLToPath } from 'node:url';
 import { migrationsFolder, openDatabase, runMigrations } from '../src/infrastructure/database/client.js';
 import { tempDir } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-// Legacy store imported (not paraphrased) so the fixture DDL can never drift.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-const { openStore } = require('../../store.mjs') as {
-  openStore: (file?: string) => {
-    insert: (row: { ts: string; from: string; to: string | null; body: string; sessionId?: string | null }) => unknown;
-    close: () => void;
-  };
-};
+// The legacy schema, copied VERBATIM from the retired store.mjs `SCHEMA`
+// constant (store.mjs:7-15 — file deleted on main in commit 809440a). It is
+// transcribed, not paraphrased, so this fixture keeps guarding the LIVE
+// production db's legacy structure after the legacy source is gone; if the
+// production schema ever differs from this DDL, this test is the tripwire.
+const LEGACY_SCHEMA_DDL = `
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL,
+  sender TEXT NOT NULL, receiver TEXT, body TEXT NOT NULL, session_id TEXT);
+CREATE TABLE IF NOT EXISTS bookmarks (
+  consumer TEXT PRIMARY KEY, last_seen_id INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_msg_receiver ON messages(receiver, id);
+CREATE INDEX IF NOT EXISTS idx_msg_sender ON messages(sender, id);
+`;
+
+/** Create a db with the EXACT legacy store.mjs schema. */
+function createLegacySchemaDb(path: string): Database.Database {
+  const db = new Database(path);
+  db.exec(LEGACY_SCHEMA_DDL);
+  return db;
+}
 
 /** server/.data/verify-copy.db — the single read-only copy of the canonical db (decision 6). */
 const canonicalCopyPath = join(
@@ -90,21 +103,15 @@ function expectSchemaMatch(legacy: Database.Database, fresh: Database.Database):
   }
 }
 
-interface WireRow {
-  id: number;
-  time: string;
-  from: string;
-  to: string | null;
-  text: string;
-}
-
 interface DataSnapshot {
   messageCount: number;
   bookmarkCount: number;
   maxMessageId: number | null;
   maxBookmarkLastSeenId: number | null;
-  /** First and last 3 message rows in the wire shape (store.mjs:17 alias). */
-  samples: WireRow[];
+  /** Every message row verbatim (id, ts, sender, receiver, body, session_id). */
+  messages: Array<{ id: number; ts: string; sender: string; receiver: string | null; body: string; session_id: string | null }>;
+  /** Every bookmark row verbatim (consumer, last_seen_id). */
+  bookmarks: Array<{ consumer: string; last_seen_id: number }>;
 }
 
 function snapshot(db: Database.Database): DataSnapshot {
@@ -116,15 +123,13 @@ function snapshot(db: Database.Database): DataSnapshot {
     const row = db.prepare(sql).get() as { m: number | null } | undefined;
     return row?.m ?? null;
   };
-  const all = db
-    .prepare('SELECT id, ts AS time, sender AS "from", receiver AS "to", body AS text FROM messages ORDER BY id')
-    .all() as WireRow[];
   return {
     messageCount: count('SELECT COUNT(*) AS n FROM messages'),
     bookmarkCount: count('SELECT COUNT(*) AS n FROM bookmarks'),
     maxMessageId: max('SELECT MAX(id) AS m FROM messages'),
     maxBookmarkLastSeenId: max('SELECT MAX(last_seen_id) AS m FROM bookmarks'),
-    samples: [...all.slice(0, 3), ...all.slice(-3)],
+    messages: db.prepare('SELECT id, ts, sender, receiver, body, session_id FROM messages ORDER BY id').all() as DataSnapshot['messages'],
+    bookmarks: db.prepare('SELECT consumer, last_seen_id FROM bookmarks ORDER BY consumer').all() as DataSnapshot['bookmarks'],
   };
 }
 
@@ -135,20 +140,17 @@ describe('baseline migration', () => {
     const fresh = openDatabase(join(dir, 'fresh.db'));
     expect(() => runMigrations(fresh.db, migrationsFolder())).not.toThrow();
 
-    // Canonical copy when available; store.mjs DDL fixture otherwise.
+    // Canonical copy when available; inline legacy-DDL fixture otherwise.
     let legacy: Database.Database;
     let source: string;
     if (existsSync(canonicalCopyPath)) {
       legacy = new Database(canonicalCopyPath, { readonly: true });
       source = `canonical copy (${canonicalCopyPath})`;
     } else {
-      console.warn('[migration-test] canonical copy unavailable; verifying against store.mjs DDL fixture');
+      console.warn('[migration-test] canonical copy unavailable; verifying against the inline legacy-DDL fixture');
       const fixturePath = join(dir, 'legacy-fixture.db');
-      const store = openStore(fixturePath);
-      store.insert({ ts: '2026-11-17T00:00:00Z', from: 'human', to: 'boss', body: 'fixture' });
-      store.close();
-      legacy = new Database(fixturePath, { readonly: true });
-      source = `store.mjs fixture (${fixturePath})`;
+      legacy = createLegacySchemaDb(fixturePath);
+      source = `legacy-DDL fixture (${fixturePath})`;
     }
     console.log(`[migration-test] schema comparison source: ${source}`);
 
@@ -171,21 +173,27 @@ describe('baseline migration', () => {
 
   it('the baseline migrates a populated legacy copy in place: legacy tables untouched, data identical', () => {
     const dir = tempDir();
-    // Source: canonical copy when present, otherwise a populated store.mjs fixture.
+    // Source: canonical copy when present, otherwise a populated legacy-DDL
+    // fixture with representative rows (apostrophes in body, NULL session_id,
+    // NULL receiver, comma-list receiver, bookmark rows).
     let sourcePath: string;
     let source: string;
     if (existsSync(canonicalCopyPath)) {
       sourcePath = canonicalCopyPath;
       source = `canonical copy (${sourcePath})`;
     } else {
-      console.warn('[migration-test] canonical copy unavailable; verifying against a populated store.mjs fixture');
+      console.warn('[migration-test] canonical copy unavailable; verifying against a populated legacy-DDL fixture');
       sourcePath = join(dir, 'legacy-fixture.db');
-      const store = openStore(sourcePath);
-      store.insert({ ts: '2026-11-17T00:00:00Z', from: 'human', to: 'boss', body: 'fixture 1' });
-      store.insert({ ts: '2026-11-17T00:00:01Z', from: 'boss', to: 'all', body: 'fixture 2', sessionId: 'ses_x' });
-      store.markSeen('boss', 2);
-      store.close();
-      source = `store.mjs fixture (${sourcePath})`;
+      const fixture = createLegacySchemaDb(sourcePath);
+      const insert = fixture.prepare('INSERT INTO messages (ts, sender, receiver, body, session_id) VALUES (?, ?, ?, ?, ?)');
+      insert.run('2026-11-17T00:00:00.000Z', 'human', 'boss', "it's alive — apostrophe in body", 'ses_human');
+      insert.run('2026-11-17T00:00:01.000Z', 'boss', 'all', 'fixture 2', null); // NULL session_id
+      insert.run('2026-11-17T00:00:02.000Z', 'ruben', null, 'legacy webhook row', null); // NULL receiver
+      insert.run('2026-11-17T00:00:03.000Z', 'greg', 'taskflow, ruben', 'comma-list receiver', 'ses_greg');
+      fixture.prepare('INSERT INTO bookmarks (consumer, last_seen_id) VALUES (?, ?)').run('boss', 2);
+      fixture.prepare('INSERT INTO bookmarks (consumer, last_seen_id) VALUES (?, ?)').run('ruben', 0);
+      fixture.close();
+      source = `legacy-DDL fixture (${sourcePath})`;
     }
     console.log(`[migration-test] in-place migration source: ${source}`);
 
