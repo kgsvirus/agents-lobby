@@ -161,11 +161,11 @@ describe('wake slice — byte-identical with bridge.mjs (bridge.mjs:98-130)', ()
       const copyPath = join(dir, 'wake-copy.db');
       copyFileSync(canonicalCopyPath, copyPath); // checked-in copy is never mutated
       // Seed fresh unread rows the way the bridge listener would: an agent →
-      // boss reply and an agent → all broadcast (bookmark stays at 821).
+      // boss reply and an agent → all broadcast. The canonical copy's unread
+      // state is whatever the live db last had (bookmark advances with real
+      // wakes) — captured here, not hardcoded, so the equivalence holds for
+      // any snapshot of production data.
       const legacy = openStore(copyPath);
-      // Bookmark 820, max id 821 → one unread row (boss's own last reply —
-      // excluded from the slice by the filter below, exactly like the bridge).
-      expect(legacy.unread('boss').map((r) => r.id)).toEqual([821]);
       legacy.insert({ ts: '2026-11-17T10:00:00.000Z', from: 'ruben', to: 'boss', body: 'newest reply' });
       legacy.insert({ ts: '2026-11-17T10:00:05.000Z', from: 'greg', to: 'all', body: 'greg broadcast' });
       const expectedRows = legacy.unread('boss').filter(
