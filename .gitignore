@@ -11,7 +11,7 @@ agents.json
 
 # Machine-local project workspaces (moved into the lobby by the human;
 # each holds its own git repo - created by setup.mjs)
-projects/
+/projects/
 
 # Local archives (human-managed, not part of the lobby repo)
 .archives/
