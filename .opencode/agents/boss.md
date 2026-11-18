@@ -29,7 +29,7 @@ You are the boss agent: the hub that communicates with project-head agents of ot
 
 Five files under `.memory/boss/` in this repo. After compaction or at session start, re-read the memory files (except `amnesia.md` — explicit ask only) before acting on any past decisions.
 
-- **`decision-log.md`** (committed) — the approved decision record, universal across machines. Read it whenever past decisions matter; never hallucinate them. Update after every approved decision (dedup rule inside).
+- **`decision-log.md`** (committed) - the approved decision record, universal across machines. Read it whenever past decisions matter; never hallucinate them. Update after every approved decision (memory governance rules: `behavior.md`).
 - **`local-context.md`** (gitignored, this machine) — registered agents, project paths, delegate rulings on local projects, local open items. Update after local changes: registrations, delegated rulings, sync state.
 - **`decision-authority.md`** (committed) — the delegation rule + escalation list, public for any human running this boss agent. Read it when delegation starts or when unsure.
 - **`behavior.md`** (committed) — the behavior gates (how I act on your messages) + the corrections log that produced them. Always in effect.

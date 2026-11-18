@@ -13,59 +13,13 @@
 > judged against "does this move the lobby toward being the human's everyday
 > assistant?"
 >
-> Dedup rule: if a would-be new decision duplicates an existing entry (same
-> substance), do NOT create a duplicate - ask the human whether to update
-> the existing entry, remove the new one, or change nothing. Only truly new
-> decisions get new entries.
+> Memory governance rules (dedup, maintenance, classification, docs-sync,
+> circularity, necessity, memory-change consent) live in `behavior.md` -
+> "Memory governance" section. Removed memory is archived to `amnesia.md`
+> (gitignored, dated, with reason).
 >
-> Memory-maintenance rule: whenever memory is updated, always cross-check
-> the other memory files (decision-log / local-context / behavior /
-> decision-authority) for redundancy, content that can carry (move to its
-> proper home), and alignment drift - including form: a rule set should
-> read as one system (parallel labels, consistent structure), not seven
-> individual drafts. Proactively, without being asked. Flag anything
-> found in the update report. Removed decisions are archived to
-> `amnesia.md` (gitignored), not deleted.
->
-> Classification rule: when adding or moving memory content, verify
-> whether it is **universal** (public -> `decision-log.md`,
-> `decision-authority.md`, `behavior.md` - committed) or
-> **machine-specific** (personal -> `local-context.md` - gitignored).
-> Machine-specific content never enters committed files; universal content
-> never hides in personal ones. When unsure, ask the human.
->
-> Docs-sync rule: when making changes to memory, features, protocol,
-> instructions, or behavior, always check `README.md` (human) and
-> `PROTOCOL.md` (agents) - and the boss `AGENTS.md` - for content that
-> needs updating or alignment per D13a. Proactively, without being asked;
-> flag anything found in the update report.
->
-> Circularity rule: when checking memory (and instructions), also look
-> for circular instructions/rules - rules that reference each other in a
-> loop, exist only to serve each other, or whose revision would
-> invalidate one another. Flag such loops to the human with a proposed
-> cut (which rule to revise or remove). Healthy pointer chains are fine:
-> each hop must carry unique substance and the chain must terminate on
-> real content. The purpose is unambiguous instruction-following: any
-> agent (or the boss) hitting these rules must never have to guess which
-> instruction wins.
->
-> Necessity rule: when checking memory, also ask of each entry: "would
-> the project still progress without this knowledge?" If yes, the entry
-> is history, not substance - propose trimming it to its protective
-> minimum (the part that guards against re-litigating a settled
-> decision) or removing it. Records whose only job is "why we don't do
-> X again" survive in one line, not a narrative.
->
-> Memory-change consent rule: removing memory (moving it to `amnesia.md`)
-> always asks the human first - removal is never autonomous. Substantive
-> memory changes (new rules, revised rules, new decisions) are drafted in
-> chat and applied only on approval. The exception is mechanical
-> status-sync - marking items closed after the human's instruction,
-> syncing wording to already-approved decisions - which is applied
-> proactively per the memory-maintenance rule and reported in the update.
->
-> Last updated: 2026-11-18 (D26 architectural migration + snapshot sync).
+> Last updated: 2026-11-19 (D26 architectural migration + snapshot sync;
+> governance rules moved to behavior.md).
 
 ## System snapshot (universal facts)
 
@@ -241,30 +195,9 @@
 
 ## Open items (system-level)
 
-- **O01** Database storage for messages - **CLOSED 2026-11-14, shipped as D23**
-  (store live: dashboard queries slices, wake carries the unread slice).
-  Deferred minors: empty-project-view broadcast fallback; labeled test-residue
-  rows in the runtime db (left as history); pre-existing `/ui` HEAD 404
-  (GET-only handler); browser-only visual checks; coalescing branch
-  unverified without a live browser. Also closed today: the stale file-era
-  wake-trigger wording - boss.md now reads the inline slice below the marker
-  (committed `77189c5`).
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
   typing into agent sessions is invisible in the log; only their replies are
   captured). Accepted v1 gap; extension = zero-token fix if wanted.
-- **O03** Duplicate delivery in the prompt API - **RESOLVED 2026-11-18
-  (evidence-based):** two distinct mechanisms confirmed. (a) Two lobby
-  server instances pointed at the same `.data/messages.db` double-capture
-  the same OpenCode event (~1 ms apart rows) and both wake the boss -
-  human-observed with a :3006 instance alongside :3005; fixed by process
-  rule, documented in README "Running" ("One server at a time"). (b) The
-  bridge-era greg/porty duplicate (identical-ms rows in two wakes) matches
-  the wake-window race (bookmark advancing after prompt instead of at
-  slice-read); retired with `bridge.mjs` - hardening for the new server's
-  wake path remains a backlog candidate.
-- **O07** Boss `AGENTS.md` slimming to a `PROTOCOL.md`/decision-log pointer -
-  CLOSED 2026-11-14: superseded by D22 (boss agent definition; AGENTS.md
-  retired).
 - **O08** Agent-to-agent direct messaging - out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
