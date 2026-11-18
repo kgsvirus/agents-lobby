@@ -204,7 +204,7 @@ session first engages with the lobby (the lobby `AGENTS.md` points here).
 | `server/src/infrastructure/database/migrations/` | Schema migrations (applied automatically at server start) |
 | `web/` | Dashboard source (Next.js App Router, static export) |
 | `web/out/` | Built dashboard served at `/ui` (created by `npm run build -w web`) |
-| `vitest.config.ts` | Test-runner scope (`server/test/` + `web/test/`; the legacy `test/*.mjs` suites stay on `node --test`) |
+| `vitest.config.ts` | Test-runner scope (`server/test/` + `web/test/`) |
 | `PROTOCOL.md` | Agent-facing rules (identity, replies, token economy) |
 | `AGENTS.md` | Instruction hub for the lobby and its managed projects (D25) |
 | `.opencode/agents/boss.md` | Boss-agent instructions (this project's sessions) |
@@ -220,7 +220,7 @@ session first engages with the lobby (the lobby `AGENTS.md` points here).
 | `.memory/boss/decision-authority.md` | Decision-authority rule + escalation list (committed, public) |
 | `.placeholder/agent/coordinator.md` | Project-head coordinator template |
 | `.opencode/skills/` | Lobby skills — see **Skills** below |
-| `bridge.mjs`, `store.mjs`, `local-projects.mjs`, `src/`, `dist/`, `test/`, `vite.config.ts` | Legacy bridge + Vite dashboard — superseded by `server/` + `web/`; **retired in a separate commit after the stabilization period** |
+| `.archives/docs/PROJECT_ANALYSIS.md` | Pre-migration project analysis (human-authored input; local archive, gitignored) |
 | `incoming_messages.txt` | Pre-db message log archive (gitignored) |
 
 ## Skills

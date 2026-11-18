@@ -9,7 +9,7 @@ description: Use when a new OpenCode session must be created for a project and r
 
 Create an OpenCode session in a project directory (or reuse an existing one),
 provision its coordinator agent, and register it in the Agents-Lobby registry
-so the bridge can message it.
+so the server can message it.
 
 ## Steps (in order)
 
@@ -102,7 +102,7 @@ so the bridge can message it.
    { "name": "<human's name>", "project": "<project name>", "session": "ses_..." }
    ```
 
-   The bridge re-reads `agents.json` on every request — no restart needed.
+   The server re-reads `agents.json` on every request - no restart needed.
 
 6. **Report** to the human: the name, session ID, project directory, the
    coordinator action taken (copied / appended / aligned / untouched), and the
@@ -123,7 +123,7 @@ at runtime; never write it to files, logs, or git. Server URL comes from
 | Strict heading match on existing coordinators | Detection is tolerant — heading variants or content mention count; non-standard headings get normalized |
 | 401 Unauthorized | Missing or wrong auth header — see Auth above |
 | 404 on `/session/...` | Paths need the `/api` prefix: `/api/session`, not `/session` |
-| Restarting the bridge after editing `agents.json` | Unnecessary — hot reload per request |
+| Restarting the server after editing `agents.json` | Unnecessary — hot reload per request |
 | Sending any message beyond the registration identity message | Requires the human's explicit approval (lobby rule) |
 | Editing a project's own coordinator content beyond the lobby section | Never — only the lobby section is appended/aligned |
 
