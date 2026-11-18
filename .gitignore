@@ -8,6 +8,8 @@ agents.json
 # Machine-specific boss memory (seeded from local-context.example.md)
 .memory/boss/local-context.md
 .memory/boss/amnesia.md
+# Human personal memory (this machine's runbook)
+.memory/human/
 
 # Machine-local project workspaces (moved into the lobby by the human;
 # each holds its own git repo - created by setup.mjs)
