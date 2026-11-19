@@ -233,5 +233,5 @@ ${existingInstall
     : `  1. Edit config/agents.json: replace the template session IDs with real ones
      (name, project, session - see config/agents.example.json for the shape).
   2. Start the server (see README "Running"):  npx tsx server/src/server.ts`}
-Protocol details: README.md, section "For project-head agents".`);
+Protocol details: README.md, section "For agents".`);
 process.exit(failed ? 1 : 0);
