@@ -30,13 +30,27 @@ export default function App() {
   const [project, setProject] = useState<string | null>(null);
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [projectsExpanded, setProjectsExpanded] = useState<Set<string>>(() => new Set());
+  // The sidebar writes a `sidebar_state` cookie on every toggle; nothing used
+  // to read it back, so a collapsed list re-opened on reload.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const { feed, loadOlder, recents } = useMessages(view, agents);
   const [theme, selectTheme] = useTheme();
 
   useEffect(() => {
+    if (window.innerWidth < 768) return; // never auto-open the mobile sheet
+    const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(true|false)/);
+    if (match) setSidebarOpen(match[1] === 'true');
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem('lobby.sidebar.collapsed');
-      if (saved) setCollapsed(new Set(JSON.parse(saved) as string[]));
+      if (saved) {
+        const parsed: unknown = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) {
+          setCollapsed(new Set(parsed));
+        }
+      }
     } catch {
       /* storage unavailable — default expanded */
     }
@@ -64,11 +78,18 @@ export default function App() {
     module === 'chat'
       ? ['Chat room', title]
       : module === 'projects'
-        ? ['Projects', project ?? 'ALL', `Phase ${phaseIndex + 1}`]
+        ? project === null
+          ? ['Projects', 'ALL']
+          : ['Projects', project, `Phase ${phaseIndex + 1}`]
         : ['Office'];
 
   return (
-    <SidebarProvider className="h-svh overflow-hidden" style={{ '--sidebar-width': '20rem' } as React.CSSProperties}>
+    <SidebarProvider
+      className="h-svh overflow-hidden"
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
+      style={{ '--sidebar-width': '20rem' } as React.CSSProperties}
+    >
       <Rail module={module} onModule={setModule} theme={theme} onTheme={selectTheme} />
 
       <Sidebar collapsible="offcanvas">
@@ -117,7 +138,7 @@ export default function App() {
                   return;
                 }
                 setProject(p);
-                setPhaseIndex(Math.min(phase, PHASES.length - 1));
+                setPhaseIndex(Math.max(0, Math.min(phase, PHASES.length - 1)));
                 setProjectsExpanded((prev) => new Set(prev).add(p));
               }}
             />

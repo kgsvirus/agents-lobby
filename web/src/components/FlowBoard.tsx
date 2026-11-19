@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -29,12 +29,23 @@ export function FlowBoard({
   const [agents, setAgents] = useState<Set<string>>(() => new Set(agentNames));
   const [tags, setTags] = useState<Set<string>>(() => new Set(WORK_ITEM_TAGS));
 
+  // The roster can change without this component unmounting (project switch or
+  // an agent registering mid-session): re-check it so items never vanish.
+  const roster = useMemo(() => agentNames.join('|'), [agentNames]);
+  useEffect(() => {
+    setAgents(new Set(agentNames));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster]);
+
   const activeCount = useMemo(
     () =>
-      STATUSES.length -
-      status.size +
-      (agentNames.length - agents.size) +
-      (WORK_ITEM_TAGS.length - tags.size),
+      Math.max(
+        0,
+        STATUSES.length -
+          status.size +
+          (agentNames.length - agents.size) +
+          (WORK_ITEM_TAGS.length - tags.size),
+      ),
     [status, agents, tags, agentNames.length],
   );
 
@@ -52,6 +63,15 @@ export function FlowBoard({
     next.has(value) ? next.delete(value) : next.add(value);
     apply(next);
   };
+
+  useEffect(() => {
+    if (!panel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPanel(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [panel]);
 
   const clear = () => {
     setQuery('');
@@ -114,8 +134,8 @@ export function FlowBoard({
 
             {panel && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setPanel(false)} />
-                <div className="absolute top-full right-0 z-50 mt-1.5 max-h-[430px] w-60 overflow-auto rounded-lg border border-border bg-card p-1.5 shadow-xl">
+                <div className="fixed inset-0 z-40" onClick={() => setPanel(false)} aria-hidden="true" />
+                <div role="group" aria-label="Work item filters" className="absolute top-full right-0 z-50 mt-1.5 max-h-[430px] w-60 overflow-auto rounded-lg border border-border bg-card p-1.5 shadow-xl">
                   <Group label="Status">
                     {STATUSES.map((s) => (
                       <Check

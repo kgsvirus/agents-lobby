@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Bot, ChevronDown, ChevronRight, Folder, LayoutGrid } from 'lucide-react';
-import { Agent, Message, View, hh, projectGroups } from '../lib/api';
+import { Agent, Message, View, hh, isVisible, projectGroups } from '../lib/api';
 
 interface Props {
   agents: Agent[];
@@ -45,14 +45,23 @@ export function ChatNav({
 
   const preview = (m: Message | undefined, fallback: string): string => {
     if (!m) return fallback;
-    const text = m.text.replace(/[`*>#]/g, '').replace(/\s+/g, ' ').trim();
+    const text = m.text
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '[image]')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[`*>#~|_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     const body = text.length > 150 ? `${text.slice(0, 150)}…` : text;
     return `${m.from === 'human' ? 'You' : m.from}: ${body}`;
   };
 
-  const bossMsg = lastFor((m) => m.from === 'boss' || m.from === 'human');
+  // Boss view includes traffic addressed to boss; a human→agent send must not
+  // surface here as the Boss preview.
+  const bossMessages = recents.filter((m) => isVisible(m, { kind: 'boss' }, agents));
+  const bossMsg = bossMessages.slice(-1)[0];
   const allMsg = recents.slice(-1)[0];
-  const bossStamp = stampOf('boss', []);
+  const bossStampTs = lastActivity['boss'] ?? bossMsg?.time ?? null;
+  const bossStamp = bossStampTs ? hh(bossStampTs) : '';
 
   const isActive = (v: View) =>
     v.kind === view.kind && ('name' in v ? (view as { name: string }).name === v.name : true);
@@ -75,9 +84,6 @@ export function ChatNav({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3.5">
         <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
-        <span className="ml-auto text-[11px] text-muted-foreground">
-          {Object.keys(groups).length}
-        </span>
       </div>
 
       <div className="px-3 pt-3 pb-2">

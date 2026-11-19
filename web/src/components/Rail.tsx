@@ -129,7 +129,7 @@ export function Rail({
   };
 
   return (
-    <nav className="flex w-[60px] shrink-0 flex-col items-center gap-2 border-r border-border bg-sidebar py-2.5">
+    <nav className="flex w-12 shrink-0 flex-col items-center gap-2 border-r border-border bg-sidebar py-2.5 md:w-[60px]">
       <div className="mb-1.5 grid size-9 place-items-center rounded-[9px] bg-blue-700 text-white">
         <AlignLeft size={18} />
       </div>
@@ -233,8 +233,4 @@ export function Rail({
       </Dialog>
     </nav>
   );
-}
-
-export function RailSeparator() {
-  return <Separator orientation="vertical" className="mx-1 h-4" />;
 }

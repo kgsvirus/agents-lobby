@@ -124,7 +124,10 @@ export function ProjectsNav({
               {open && (
                 <div className="mr-2 mb-1.5 ml-5 border-l border-border pl-1.5">
                   {PHASES.filter((ph) => !q || ph.toLowerCase().includes(q) || project.toLowerCase().includes(q)).map(
-                    (label, index) => {
+                    (label) => {
+                      // Index must come from the full list: filtering hides rows,
+                      // it must not renumber phases or point at the wrong one.
+                      const index = PHASES.indexOf(label);
                       const phaseActive = active && selectedPhase === index;
                       return (
                         <button
@@ -153,8 +156,10 @@ export function ProjectsNav({
           );
         })}
 
-        {projects.length === 0 && (
-          <p className="px-3.5 py-6 text-xs text-muted-foreground">No projects found.</p>
+        {visible.length === 0 && (
+          <p className="px-3.5 py-6 text-xs text-muted-foreground">
+            {projects.length === 0 ? 'No projects found.' : 'No matches.'}
+          </p>
         )}
       </div>
     </div>

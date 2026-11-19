@@ -42,6 +42,14 @@ export function ProjectDetail({
     .slice(-1)[0];
   const phaseLabel = PHASES[phaseIndex] ?? PHASES[0];
 
+  const items = seedWorkItems(project, phaseIndex, projectAgents.map((a) => a.name));
+  // Items fall back to stand-in agents when a project has none registered; the
+  // filter must use those same names or every card gets filtered out.
+  const agentNames =
+    projectAgents.length > 0
+      ? projectAgents.map((a) => a.name)
+      : Array.from(new Set(items.map((i) => i.agent)));
+
   const metrics = [
     { label: 'Agents', value: String(projectAgents.length) },
     { label: 'Phases', value: String(PHASES.length) },
@@ -81,10 +89,11 @@ export function ProjectDetail({
       </div>
 
       <FlowBoard
+        key={project}
         phaseIndex={phaseIndex}
         phaseLabel={phaseLabel}
-        agentNames={projectAgents.map((a) => a.name)}
-        items={seedWorkItems(project, phaseIndex, projectAgents.map((a) => a.name))}
+        agentNames={agentNames}
+        items={items}
       />
     </div>
   );
