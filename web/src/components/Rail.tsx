@@ -1,5 +1,8 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import {
+  AlignLeft,
   Building2,
   FolderKanban,
   MessageSquare,
@@ -21,7 +24,6 @@ import type { Theme } from '../lib/theme';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Separator } from './ui/separator';
-import { SidebarTrigger } from './ui/sidebar';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -48,7 +50,9 @@ const MODULES: { id: Module; label: string; Icon: LucideIcon }[] = [
   { id: 'office', label: 'Office', Icon: Building2 },
 ];
 
-export function TopNav({
+// The 60px rail: modules on top, settings pinned to the bottom. It replaces the
+// old header tabs, so the header is only breadcrumb + trigger.
+export function Rail({
   module,
   onModule,
   theme,
@@ -67,17 +71,14 @@ export function TopNav({
 
   // Identity mode: connect this browser silently, unless the tab opted out.
   // Shared-token mode: keep the paste (it is the only browser path there).
-  // Open mode: nothing to connect.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const current = await fetchAuthMode().catch(() => null);
-      if (cancelled || current === null) return; // status unknown: render nothing
+      if (cancelled || current === null) return;
       setMode(current);
       if (current === 'identity') {
         if (isDisconnected()) return;
-        // A token pasted in a previous (shared-token) life must not override
-        // the browser session: clear it so the cookie is the only credential.
         setHumanToken(null);
         const principal = await fetchPrincipal().catch(() => connectBrowser().catch(() => null));
         if (!cancelled && principal !== null) setIdentity(`${principal.name} (${principal.kind})`);
@@ -124,61 +125,56 @@ export function TopNav({
     setIdentity(null);
     setConnectError('');
     setTokenDraft('');
-    if (mode === 'identity') {
-      // Sticky for this tab: a reload must not silently sign back in.
-      await disconnectBrowser().catch(() => null);
-    }
+    if (mode === 'identity') await disconnectBrowser().catch(() => null);
   };
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-3">
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
-      <h1 className="text-sm font-bold text-foreground">Agents Lobby</h1>
-
-      <div className="ml-3 flex items-center gap-1">
-        {MODULES.map((m) => (
-          <Button
-            key={m.id}
-            variant={module === m.id ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => onModule(m.id)}
-            aria-current={module === m.id ? 'page' : undefined}
-            className={`items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
-              module === m.id
-                ? 'bg-blue-700 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-600'
-                : 'text-gray-900 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700'
-            }`}
-          >
-            <m.Icon size={14} className="shrink-0" />
-            {m.label}
-          </Button>
-        ))}
+    <nav className="flex w-[60px] shrink-0 flex-col items-center gap-2 border-r border-border bg-sidebar py-2.5">
+      <div className="mb-1.5 grid size-9 place-items-center rounded-[9px] bg-blue-700 text-white">
+        <AlignLeft size={18} />
       </div>
 
-      <div className="ml-auto">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" aria-label="Settings" />}
+      {MODULES.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          onClick={() => onModule(m.id)}
+          aria-label={m.label}
+          aria-current={module === m.id ? 'page' : undefined}
+          title={m.label}
+          className={`grid size-9 cursor-pointer place-items-center rounded-[9px] transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
+            module === m.id
+              ? 'bg-blue-700 text-white'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          }`}
+        >
+          <m.Icon size={18} />
+        </button>
+      ))}
+
+      <div className="flex-1" />
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon-sm" aria-label="Settings" className="text-muted-foreground hover:bg-accent hover:text-foreground" />}
+        >
+          <Settings className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="right" className="w-52">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Settings</DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem
+            checked={theme === 'dark'}
+            onCheckedChange={(checked) => onTheme(checked ? 'dark' : 'light')}
           >
-            <Settings className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Settings</DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={theme === 'dark'}
-              onCheckedChange={(checked) => onTheme(checked ? 'dark' : 'light')}
-            >
-              Dark mode
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setConnectionOpen(true)}>Connection…</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+            Dark mode
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setConnectionOpen(true)}>Connection…</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
         <DialogContent className="sm:max-w-md">
@@ -235,6 +231,10 @@ export function TopNav({
           {connectError !== '' && <p className="text-sm text-destructive">{connectError}</p>}
         </DialogContent>
       </Dialog>
-    </header>
+    </nav>
   );
+}
+
+export function RailSeparator() {
+  return <Separator orientation="vertical" className="mx-1 h-4" />;
 }

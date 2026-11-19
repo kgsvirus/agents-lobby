@@ -110,3 +110,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* The module rail occupies the first 60px, so the sidebar's fixed container
+   starts after it while expanded. Collapsed (offcanvas) it must still slide
+   fully off-screen: the state lives on the sidebar's own `group` element, so
+   both rules are scoped through it (the second wins when collapsed). */
+@media (min-width: 768px) {
+  [data-slot='sidebar'] [data-slot='sidebar-container'][data-side='left'] {
+    left: 60px;
+  }
+  [data-slot='sidebar'][data-collapsible='offcanvas'] [data-slot='sidebar-container'][data-side='left'] {
+    left: calc(var(--sidebar-width) * -1);
+  }
+}

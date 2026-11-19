@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
-// Rendered-behaviour tests for the chat UI: navigation tree, composer gating
-// and bubble labels. They cover the branches the logic-only suites cannot see.
+// Rendered-behaviour tests for the chat list, composer gating and bubbles.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { SidebarProvider } from '../src/components/ui/sidebar';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 import { ChatNav } from '../src/components/Sidebar';
 import { Composer } from '../src/components/Composer';
@@ -19,20 +17,16 @@ const AGENTS: Agent[] = [
 
 const renderNav = (props: Partial<React.ComponentProps<typeof ChatNav>> = {}) =>
   render(
-    <TooltipProvider>
-      <SidebarProvider>
-        <ChatNav
-          agents={AGENTS}
-          recents={[]}
-          lastActivity={{}}
-          view={{ kind: 'boss' } as View}
-          collapsed={new Set<string>()}
-          onToggleExpand={() => {}}
-          onSelect={() => {}}
-          {...props}
-        />
-      </SidebarProvider>
-    </TooltipProvider>,
+    <ChatNav
+      agents={AGENTS}
+      recents={[]}
+      lastActivity={{}}
+      view={{ kind: 'boss' } as View}
+      collapsed={new Set<string>()}
+      onToggleExpand={() => {}}
+      onSelect={() => {}}
+      {...props}
+    />,
   );
 
 describe('ChatNav', () => {
@@ -66,12 +60,19 @@ describe('ChatNav', () => {
     fireEvent.click(screen.getByLabelText('Collapse TaskFlow'));
     expect(onToggleExpand).toHaveBeenCalledWith('TaskFlow');
   });
+
+  it('filters the list by name', () => {
+    renderNav();
+    fireEvent.change(screen.getByPlaceholderText('Search conversations…'), {
+      target: { value: 'ImmigApp' },
+    });
+    expect(screen.queryByText('TaskFlow')).toBeNull();
+    expect(screen.getByText('ImmigApp')).toBeTruthy();
+  });
 });
 
 describe('Composer gating', () => {
   it('disables Send when no recipient is selected', () => {
-    // A project with no agents selects nothing (the agent view always
-    // pre-selects its own name — see defaultTargets).
     render(<Composer agents={AGENTS} view={{ kind: 'project', name: 'Nope' }} onSent={() => {}} />);
     expect((screen.getByRole('button', { name: /send/i }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -85,12 +86,12 @@ describe('Composer gating', () => {
 });
 
 describe('MessageBubble', () => {
-  const msg = (id: number, from: string) => ({
+  const msg = (id: number, from: string, text = 'hello') => ({
     id,
     time: '2026-11-20T00:27:00.000Z',
     from,
     to: from === 'human' ? 'boss' : null,
-    text: 'hello',
+    text,
   });
 
   it('labels the boss bubble and floats the human bubble right', () => {
@@ -105,10 +106,21 @@ describe('MessageBubble', () => {
     expect(container.querySelector('[data-id="2"]')!.className).toContain('ml-auto');
   });
 
+  it('renders markdown instead of raw markers', () => {
+    const { container } = render(
+      <TooltipProvider>
+        <MessageBubble m={msg(3, 'boss', '**bold** and `code`')} />
+      </TooltipProvider>,
+    );
+    expect(container.querySelector('strong')?.textContent).toBe('bold');
+    expect(container.querySelector('code')?.textContent).toBe('code');
+    expect(container.textContent).not.toContain('**');
+  });
+
   it('no longer renders an avatar chip in the label', () => {
     const { container } = render(
       <TooltipProvider>
-        <MessageBubble m={msg(3, 'boss')} />
+        <MessageBubble m={msg(4, 'boss')} />
       </TooltipProvider>,
     );
     expect(container.querySelector('[data-slot="avatar"]')).toBeNull();
