@@ -5,7 +5,8 @@ worktree (branch `feat/migration`, working-tree changes). Every claim cites a re
 path/file in this worktree; items not verifiable from source are labeled.
 Companion documents: `docs/migration/assessment.md` (pre-migration analysis,
 including the legacy behavior citations), `MIGRATION.md` (work order),
-`server/README.md` (operator-facing API/config reference).
+`server/README.md` (operator-facing API/config reference), `docs/tech-stack.md`
+(the stack reference: versions, layer rules, machine constraints).
 
 **Strangler position:** this stack is NOT yet canonical. The legacy bridge
 (`bridge.mjs`, port 3005) still runs in `F:\DEVELOPMENT\AI\PROJECTS\Agents-Lobby`
@@ -73,7 +74,7 @@ agents-lobby/
     .data/                   # dev-only: dev.db, verify-copy.db (READ-ONLY copy of the
                              #   canonical db used by tests), server.auth.json (opt.)
   web/                       # NEW frontend (Next.js 15 App Router + React 19 +
-    package.json             #   Tailwind v4; output:'export', basePath '/ui')
+    package.json             #   Tailwind v4 + lucide-react; output:'export', basePath '/ui')
     next.config.ts           # static export + dev-only rewrites → :3006
     src/
       app/                   # layout.tsx (theme bootstrap script), page.tsx, globals.css

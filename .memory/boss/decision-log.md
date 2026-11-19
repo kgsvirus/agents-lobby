@@ -290,6 +290,30 @@
   sections; backup = `.bak-YYYYMMDD-HHmmss` then replace). - approved (apply
   without commit)
 
+- **D35** The lobby hub is the global instruction set. From 2026-11-19 all
+  projects are worked on inside Agents-Lobby (human's standing rule; stated in
+  an earlier session and restated now), so the machine-global
+  `~/.config/opencode/AGENTS.md` was retired - renamed `AGENTS.md.bak` - because
+  its sections 1-10 are duplicated verbatim in this repo's `AGENTS.md`, which
+  every managed project's root pointer reaches. One source: project pointer ->
+  hub `AGENTS.md` -> `PROTOCOL.md` for lobby rules. Consequence: a session
+  running outside Agents-Lobby now gets no global instructions - intended.
+  - approved (human; apply without commit)
+
+- **D36** Icons are **lucide-react** (v1, `web` workspace). Icons are imported
+  per name (`import { Settings } from 'lucide-react'`) so tree-shaking ships
+  only what is used; dynamic string lookup is not a thing here. v1 sets
+  `aria-hidden` on icons by default, so an icon-only control supplies its own
+  `aria-label`, and v1 has no brand icons. Global size/colour/stroke defaults
+  would be set with `<LucideProvider>`. - approved (apply without commit)
+
+- **D37** The tech stack is documented in ONE reference -
+  `docs/tech-stack.md` (versions, layer rules, machine constraints) - plus a
+  summary table in `README.md` under "Tech stack", so a new session or a
+  delegated task can read the stack without asking. `docs/migration/architecture.md`
+  points at it rather than repeating it. Kept in sync by editing the reference,
+  not the copies. - approved (apply without commit)
+
 ## Open items (system-level)
 
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
