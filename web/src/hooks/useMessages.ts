@@ -60,6 +60,10 @@ export function useMessages(view: View, agents: Agent[]) {
   const recents = useRef<Message[]>([]); // latest messages overall (sidebar stamps)
   const [, bump] = useState(0);
   const rerender = () => bump((n) => n + 1);
+  // A failed initial page used to be silent: the feed stayed "not ready" and
+  // ChatFeed showed skeletons forever. Track it so the UI can say so.
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const viewRef = useRef<View>(view);
   viewRef.current = view;
   const agentsRef = useRef<Agent[]>(agents);
@@ -150,17 +154,20 @@ export function useMessages(view: View, agents: Agent[]) {
       caches.current.set(key, entry);
       rerender();
     }
+    setFailed(false);
     fetchMessages(viewRef.current, { after: 0, limit: PAGE })
       .then((page) => {
         if (caches.current.get(key) !== entry) return;
         mergeInitial(entry.cache, page);
+        setFailed(false);
         rerender();
       })
       .catch(() => {
-        /* server down — entry stays not-ready; retried on next switch/stream open */
+        /* server down — entry stays not-ready; the UI reports it and retry() re-runs */
+        setFailed(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [view, reloadKey]);
 
   // SSE: one connection; each row is appended into every cached view it
   // belongs to (visibility per D11), so inactive views stay current too.
@@ -333,6 +340,10 @@ export function useMessages(view: View, agents: Agent[]) {
     feed: active
       ? { ...active.cache }
       : { messages: [] as Message[], hasMore: false, loadingOlder: false, ready: false },
+    /** True when the initial page for the active view could not be fetched. */
+    failed,
+    /** Re-runs the initial page fetch (used by the offline banner's Retry). */
+    retry: () => setReloadKey((k) => k + 1),
     loadOlder,
     recents: recents.current,
   };

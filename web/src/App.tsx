@@ -4,6 +4,7 @@ import { Agent, View, fetchAgents, fetchLastActivity, fetchLocalProjects } from 
 import { useMessages, viewKey } from './hooks/useMessages';
 import { useTheme } from './hooks/useTheme';
 import { ContentBar } from './components/ContentBar';
+import { OfflineBanner } from './components/OfflineBanner';
 import { Rail, type Module } from './components/Rail';
 import { ChatNav } from './components/Sidebar';
 import { ProjectsNav } from './components/ProjectsSidebar';
@@ -33,7 +34,15 @@ export default function App() {
   // The sidebar writes a `sidebar_state` cookie on every toggle; nothing used
   // to read it back, so a collapsed list re-opened on reload.
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { feed, loadOlder, recents } = useMessages(view, agents);
+  // Read failures are tracked per source so the UI can say "can't reach the
+  // API" instead of rendering an empty dashboard.
+  const [readFailures, setReadFailures] = useState({
+    agents: false,
+    projects: false,
+    activity: false,
+  });
+  const [reloadKey, setReloadKey] = useState(0);
+  const { feed, failed: feedFailed, retry: retryFeed, loadOlder, recents } = useMessages(view, agents);
   const [theme, selectTheme] = useTheme();
 
   useEffect(() => {
@@ -57,13 +66,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchAgents().then(setAgents).catch(() => setAgents([]));
+    // Keep the last good data on failure; only flag it.
+    fetchAgents()
+      .then((next) => {
+        setAgents(next);
+        setReadFailures((f) => ({ ...f, agents: false }));
+      })
+      .catch(() => setReadFailures((f) => ({ ...f, agents: true })));
     // Store-backed sidebar stamps: one fetch on load, no polling.
-    fetchLastActivity().then(setLastActivity).catch(() => {});
+    fetchLastActivity()
+      .then((next) => {
+        setLastActivity(next);
+        setReadFailures((f) => ({ ...f, activity: false }));
+      })
+      .catch(() => setReadFailures((f) => ({ ...f, activity: true })));
     // /api/local-projects is a guaranteed compat route (decision 2); the catch
-    // is graceful degradation for GENUINE failures (e.g. readdir error → 500).
-    fetchLocalProjects().then(setLocalProjects).catch(() => setLocalProjects([]));
-  }, []);
+    // is graceful degradation for GENUINE failures (e.g. readdir error -> 500).
+    fetchLocalProjects()
+      .then((next) => {
+        setLocalProjects(next);
+        setReadFailures((f) => ({ ...f, projects: false }));
+      })
+      .catch(() => setReadFailures((f) => ({ ...f, projects: true })));
+  }, [reloadKey]);
+
+  const offline = readFailures.agents || readFailures.projects || readFailures.activity || feedFailed;
+  const retryAll = () => {
+    setReloadKey((k) => k + 1);
+    retryFeed();
+  };
 
   const title =
     view.kind === 'all'
@@ -121,6 +152,7 @@ export default function App() {
               projects={localProjects}
               agents={agents}
               lastActivity={lastActivity}
+              error={readFailures.projects}
               selected={project}
               selectedPhase={phaseIndex}
               expanded={projectsExpanded}
@@ -148,6 +180,7 @@ export default function App() {
 
       <SidebarInset className="min-h-0 min-w-0">
         <ContentBar crumbs={crumbs} />
+        {offline && <OfflineBanner onRetry={retryAll} />}
 
         {/* Chat stays MOUNTED but hidden across module round-trips: this
             preserves ChatFeed reading position and the Composer draft. */}
@@ -163,6 +196,8 @@ export default function App() {
               loadingOlder={feed.loadingOlder}
               hasMore={feed.hasMore}
               ready={feed.ready}
+              error={feedFailed}
+              onRetry={retryFeed}
               onLoadOlder={loadOlder}
               resetKey={viewKey(view)}
             />

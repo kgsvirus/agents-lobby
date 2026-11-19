@@ -9,6 +9,8 @@ interface Props {
   projects: string[];
   agents: Agent[];
   lastActivity: Record<string, string | null>;
+  /** The projects read failed: say so instead of claiming there are none. */
+  error?: boolean;
   selected: string | null;
   selectedPhase: number;
   expanded: Set<string>;
@@ -23,6 +25,7 @@ export function ProjectsNav({
   projects,
   agents,
   lastActivity,
+  error = false,
   selected,
   selectedPhase,
   expanded,
@@ -158,7 +161,11 @@ export function ProjectsNav({
 
         {visible.length === 0 && (
           <p className="px-3.5 py-6 text-xs text-muted-foreground">
-            {projects.length === 0 ? 'No projects found.' : 'No matches.'}
+            {error
+              ? "Couldn't load projects."
+              : projects.length === 0
+                ? 'No projects found.'
+                : 'No matches.'}
           </p>
         )}
       </div>

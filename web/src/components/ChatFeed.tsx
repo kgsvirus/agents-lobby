@@ -12,6 +12,8 @@ export function ChatFeed({
   loadingOlder,
   hasMore,
   ready,
+  error,
+  onRetry,
   onLoadOlder,
   resetKey,
 }: {
@@ -21,6 +23,9 @@ export function ChatFeed({
   loadingOlder?: boolean;
   hasMore?: boolean;
   ready?: boolean;
+  /** The initial page could not be fetched: say so instead of loading forever. */
+  error?: boolean;
+  onRetry?: () => void;
   onLoadOlder?: () => void;
   resetKey: string;
 }) {
@@ -181,7 +186,21 @@ export function ChatFeed({
         ) : null}
       </div>
       {msgs.length === 0 ? (
-        ready ? (
+        error ? (
+          <div className="m-auto flex flex-col items-center gap-2 text-center text-destructive">
+            <MessageSquare size={24} />
+            <p className="text-sm">Couldn&apos;t load messages.</p>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="cursor-pointer rounded-md border border-destructive/40 px-2.5 py-1 text-xs hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive focus-visible:outline-none"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        ) : ready ? (
           <div className="m-auto flex flex-col items-center gap-2 text-gray-600 dark:text-gray-400">
             <MessageSquare size={24} />
             <p className="text-sm">No messages for this view yet.</p>
