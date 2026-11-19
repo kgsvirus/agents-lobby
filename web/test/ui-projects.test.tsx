@@ -86,4 +86,22 @@ describe('ProjectsNav', () => {
     );
     expect(screen.getByText(`${PHASE_COUNTS[0]} items`)).toBeTruthy();
   });
+
+  it('says the projects could not be loaded when the read failed', () => {
+    render(
+      <ProjectsNav
+        projects={[]}
+        agents={[]}
+        lastActivity={{}}
+        error
+        selected={null}
+        selectedPhase={0}
+        expanded={new Set<string>()}
+        onToggleExpand={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByText(/load projects/i)).toBeTruthy();
+    expect(screen.queryByText('No projects found.')).toBeNull();
+  });
 });

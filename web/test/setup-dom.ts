@@ -26,6 +26,14 @@ if (typeof window !== 'undefined') {
   const g = globalThis as unknown as Record<string, unknown>;
   if (!g.ResizeObserver) g.ResizeObserver = ObserverStub;
   if (!g.IntersectionObserver) g.IntersectionObserver = ObserverStub;
+
+  // jsdom does not implement scrolling; ChatFeed's layout effect calls it.
+  if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+    Element.prototype.scrollTo = () => {};
+  }
+  if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
 }
 
 export {};

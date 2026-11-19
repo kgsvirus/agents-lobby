@@ -205,3 +205,20 @@ describe('loadOlder', () => {
     expect(result.current.feed.hasMore).toBe(true); // older page still pending for scroll
   });
 });
+
+describe('initial load failure', () => {
+  it('reports the failure and retry() recovers', async () => {
+    handler = () => ({ fail: true, body: page([]) });
+    const { result } = renderHook(() => useMessages(BOSS, AGENTS));
+
+    await waitFor(() => expect(result.current.failed).toBe(true), { timeout: 5000 });
+    expect(result.current.feed.ready).toBe(false);
+
+    handler = () => ({ body: page([row(1)]) });
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.failed).toBe(false), { timeout: 5000 });
+    expect(result.current.feed.ready).toBe(true);
+    expect(result.current.feed.messages.map((m) => m.id)).toEqual([1]);
+  });
+});
