@@ -81,9 +81,9 @@ export is safe).
 
 | Thing | Value |
 |---|---|
-| Test runner | **Vitest 3**, configured at the root: `vitest.config.ts` scopes it to `server/test/**` + `web/test/**` |
-| Web tests | **jsdom 26** + **@testing-library/react 16** / `@testing-library/dom 10` |
-| Gate | `npm test` (currently 44 files / 390 tests) |
+| Test runner | **Vitest 3**, configured at the root: `vitest.config.ts` scopes it to `server/test/**` + `web/test/**` (`*.test.ts` **and** `*.test.tsx`), maps the `@/` alias, and loads `web/test/setup-dom.ts` (jsdom shims for `matchMedia` / `ResizeObserver` that the Base UI primitives touch) |
+| Web tests | **jsdom 26** + **@testing-library/react 16** / `@testing-library/dom 10`. Logic suites are `.ts`; rendered component tests are `.tsx` with `// @vitest-environment jsdom` and `afterEach(cleanup)` (Vitest has no globals, so Testing Library's auto-cleanup does not register itself) |
+| Gate | `npm test` (currently 46 files / 400 tests) |
 | Onboarding | `node setup.mjs` — prerequisites, registry template, `projects/` |
 
 ## Machine constraints
