@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ApiError,
+  connectBrowser,
+  disconnectBrowser,
+  fetchAuthMode,
   fetchPrincipal,
   getHumanToken,
+  isDisconnected,
   setHumanToken,
+  type AuthMode,
 } from '../lib/api';
 import type { Theme } from '../lib/theme';
 import { Button } from './ui/button';
@@ -29,19 +34,50 @@ export function TopNav({
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<AuthMode | null>(null);
   const [tokenDraft, setTokenDraft] = useState('');
   const [identity, setIdentity] = useState<string | null>(null);
   const [connectError, setConnectError] = useState('');
 
-  // A stored token is only known to be valid once the server confirms it.
+  // Identity mode: connect this browser silently, unless the tab opted out.
+  // Shared-token mode: keep the paste (it is the only browser path there).
+  // Open mode: nothing to connect.
   useEffect(() => {
-    if (getHumanToken() === null) return;
-    fetchPrincipal()
-      .then((p) => setIdentity(`${p.name} (${p.kind})`))
-      .catch(() => setIdentity(null));
+    let cancelled = false;
+    (async () => {
+      const current = await fetchAuthMode().catch(() => null);
+      if (cancelled || current === null) return; // status unknown: render nothing
+      setMode(current);
+      if (current === 'identity') {
+        if (isDisconnected()) return;
+        // A token pasted in a previous (shared-token) life must not override
+        // the browser session: clear it so the cookie is the only credential.
+        setHumanToken(null);
+        const principal = await fetchPrincipal().catch(() => connectBrowser().catch(() => null));
+        if (!cancelled && principal !== null) setIdentity(`${principal.name} (${principal.kind})`);
+        return;
+      }
+      if (getHumanToken() === null) return;
+      const principal = await fetchPrincipal().catch(() => null);
+      if (!cancelled && principal !== null) setIdentity(`${principal.name} (${principal.kind})`);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const connect = async () => {
+    if (mode === 'identity') {
+      try {
+        const p = await connectBrowser();
+        setIdentity(`${p.name} (${p.kind})`);
+        setConnectError('');
+      } catch (err) {
+        setIdentity(null);
+        setConnectError(err instanceof ApiError ? err.message : 'Connect failed');
+      }
+      return;
+    }
     const token = tokenDraft.trim();
     if (token === '') return;
     setHumanToken(token);
@@ -57,11 +93,15 @@ export function TopNav({
     }
   };
 
-  const disconnect = () => {
+  const disconnect = async () => {
     setHumanToken(null);
     setIdentity(null);
     setConnectError('');
     setTokenDraft('');
+    if (mode === 'identity') {
+      // Sticky for this tab: a reload must not silently sign back in.
+      await disconnectBrowser().catch(() => null);
+    }
   };
 
   // Close on outside click (the icon re-click closes via its own handler).
@@ -141,14 +181,42 @@ export function TopNav({
               <span className="text-xs text-gray-900 dark:text-gray-200">Dark / Light</span>
             </div>
             <div className="mt-1 border-t border-gray-200 px-1 pt-2 dark:border-gray-600">
-              <label
-                htmlFor="human-token"
-                className="block text-xs text-gray-900 dark:text-gray-200"
-              >
-                Human token
-              </label>
-              {identity === null ? (
+              {mode === null ? null : identity !== null ? (
                 <>
+                  <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
+                    Connected as {identity}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void disconnect()}
+                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
+                  >
+                    Disconnect
+                  </Button>
+                </>
+              ) : mode === 'identity' ? (
+                <>
+                  <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
+                    Not connected
+                  </p>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => void connect()}
+                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
+                  >
+                    Connect this browser
+                  </Button>
+                </>
+              ) : mode === 'shared-token' ? (
+                <>
+                  <label
+                    htmlFor="human-token"
+                    className="block text-xs text-gray-900 dark:text-gray-200"
+                  >
+                    Human token
+                  </label>
                   <input
                     id="human-token"
                     type="password"
@@ -171,19 +239,9 @@ export function TopNav({
                   </Button>
                 </>
               ) : (
-                <>
-                  <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
-                    Connected as {identity}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={disconnect}
-                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
-                  >
-                    Disconnect
-                  </Button>
-                </>
+                <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
+                  No identities configured - sends are open locally.
+                </p>
               )}
               {connectError !== '' && (
                 <p className="mt-1 text-xs text-red-700 dark:text-red-500">{connectError}</p>

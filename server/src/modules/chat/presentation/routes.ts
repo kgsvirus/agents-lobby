@@ -9,8 +9,17 @@ import { z } from 'zod';
 import type { ChatService } from '../application/chat-service.js';
 import { parseMessageQuery } from '../domain/query.js';
 import { AppError } from '../../../shared/errors/index.js';
+import type { FastifyRequest } from 'fastify';
 import { bearerCheck } from '../../../api/middleware/auth.js';
-import { requirePrincipal } from '../../../api/middleware/peer-auth.js';
+import { requireCredential } from '../../../api/middleware/peer-auth.js';
+import {
+  clearSessionCookie,
+  isLoopbackAddress,
+  isLoopbackHost,
+  readSessionId,
+  sessionCookie,
+  type SessionStore,
+} from '../../../api/middleware/session.js';
 import type { Principal } from '../../../infrastructure/config/index.js';
 
 // `from` is validated in the SERVICE (business rule, bridge.mjs:397-398) so
@@ -58,21 +67,113 @@ export interface ChatRoutesOptions {
   /** Token -> principal map (peer messaging). Undefined = the feature is off:
    *  no identity endpoint, and /send keeps the legacy body-`from` mode. */
   readonly principals?: ReadonlyMap<string, Principal>;
+  /** Browser sessions (loopback auto-connect). REQUIRED alongside `principals`;
+   *  an identity server without it would have to fail open. */
+  readonly sessions?: SessionStore;
+  /** The bind address. Required for identity mode; an absent value refuses to
+   *  mint browser sessions rather than assuming loopback. */
+  readonly host?: string;
 }
+
+/** Which credential mode this server runs in. */
+export type AuthMode = 'identity' | 'shared-token' | 'open';
+
+/** Proxy/tunnel headers: their presence means a reverse proxy sits in front of
+ *  the lobby, so the peer address is the proxy's, not the browser's, and
+ *  minting a human session would grant it to whoever the proxy serves. */
+const PROXY_HEADERS = ['x-forwarded-for', 'forwarded', 'x-real-ip'] as const;
 
 export function chatRoutes(app: FastifyInstance, opts: ChatRoutesOptions): void {
   const service = opts.service;
   const principals = opts.principals;
-  // Route-level preHandler so the token gates ONLY /send + /prompt.
-  // Identity mode (peer-auth file present) replaces the legacy shared token:
-  // the principal, not the body, decides who is sending.
-  const peerGuard = principals === undefined ? undefined : requirePrincipal(principals);
-  const sendAuth = principals !== undefined ? peerGuard : opts.authToken === undefined ? undefined : bearerCheck(opts.authToken);
+  const sessions = opts.sessions;
+  const mode: AuthMode =
+    principals !== undefined ? 'identity' : opts.authToken !== undefined ? 'shared-token' : 'open';
+  if (principals !== undefined && sessions === undefined) {
+    // Refuse to build instead of failing open on /send.
+    throw new Error('chatRoutes: sessions are required when principals are configured');
+  }
+  const identity = principals !== undefined && sessions !== undefined ? { principals, sessions } : undefined;
+  const peerGuard = identity === undefined ? undefined : requireCredential(identity.principals, identity.sessions);
+  const sendAuth =
+    mode === 'identity'
+      ? peerGuard
+      : mode === 'shared-token'
+        ? bearerCheck(opts.authToken as string)
+        : undefined;
 
-  // Identity check for the dashboard's Connect button: verifies a pasted token
-  // without sending a message. Registered only when identities exist.
-  if (principals !== undefined) {
+  app.get('/api/auth-mode', async () => ({ mode }));
+
+  // Identity check for the dashboard: no message is sent. In identity mode it
+  // proves the cookie/token; in shared-token mode the shared token IS the human
+  // credential, so it answers as the human (the UI offers a paste there).
+  if (mode === 'identity') {
     app.get('/api/principal', { preHandler: peerGuard }, async (request) => request.principal);
+  } else if (mode === 'shared-token') {
+    app.get('/api/principal', { preHandler: sendAuth }, async () => ({ name: 'human', kind: 'human' }));
+  }
+
+  if (identity !== undefined) {
+    /** Shared refusal checks for both browser-session routes. */
+    const browserOnly = (request: FastifyRequest): void => {
+      if (PROXY_HEADERS.some((name) => request.headers[name] !== undefined)) {
+        throw new AppError(403, 'proxied', 'browser sessions are not minted behind a proxy or tunnel');
+      }
+      if (request.headers['x-lobby-connect'] !== '1') {
+        // A header a plain HTML form cannot send: together with the JSON
+        // content type this is what stops a cross-site form from connecting
+        // or disconnecting the visitor.
+        throw new AppError(403, 'connect_header_required', 'this endpoint requires the x-lobby-connect header');
+      }
+      const host = opts.host;
+      if (host === undefined || !isLoopbackHost(host)) {
+        throw new AppError(403, 'not_loopback', 'browser sessions are only minted for a loopback bind');
+      }
+      if (!isLoopbackAddress(request.socket.remoteAddress)) {
+        throw new AppError(403, 'not_loopback', 'browser sessions are only minted for loopback callers');
+      }
+      const hostHeader = request.headers.host;
+      // Strip the port and compare the hostname: this is the DNS-rebinding
+      // guard (an attacker page on evil.com:3005 must not be same-origin).
+      const hostname = (hostHeader ?? '').replace(/:\d+$/, '').toLowerCase();
+      if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(hostname)) {
+        throw new AppError(403, 'bad_host', 'browser sessions are only minted for a loopback host name');
+      }
+    };
+
+    // Loopback auto-connect: a browser on this machine becomes `human` without
+    // a paste.
+    app.post('/api/connect', async (request, reply) => {
+      browserOnly(request);
+      // Rotate: the browser's previous id (if any) stops working immediately.
+      const previous = readSessionId(request.headers.cookie);
+      if (previous !== null) identity.sessions.delete(previous);
+      const principal: Principal = { name: 'human', kind: 'human' };
+      const id = identity.sessions.create(principal);
+      reply.header('set-cookie', sessionCookie(id));
+      return principal;
+    });
+
+    // Idempotent: a dead cookie (or none) still returns 200 and clears it, so a
+    // reload after a restart does not surface an error.
+    app.post('/api/disconnect', async (request, reply) => {
+      browserOnly(request);
+      const id = readSessionId(request.headers.cookie);
+      if (id !== null) identity.sessions.delete(id);
+      reply.header('set-cookie', clearSessionCookie());
+      return { status: 'ok' };
+    });
+  } else if (mode === 'open' || mode === 'shared-token') {
+    // Explain the refusal instead of 404: the dashboard asks this on load.
+    app.post('/api/connect', async () => {
+      throw new AppError(
+        403,
+        mode === 'open' ? 'auth_mode_open' : 'auth_mode_shared_token',
+        mode === 'open'
+          ? 'no identities are configured (no .data/peer-auth.json); nothing to connect as'
+          : 'this server uses a shared token; paste it in Settings instead of connecting a browser',
+      );
+    });
   }
 
   app.get('/api/messages', async (request) => {

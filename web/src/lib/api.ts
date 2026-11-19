@@ -98,11 +98,14 @@ export const requestJson = async <T>(path: string, init?: RequestInit): Promise<
 
 export const fetchAgents = async (): Promise<Agent[]> => requestJson<Agent[]>('/api/agents');
 
-// --- Human token (peer messaging) --------------------------------------------
-// Stored in sessionStorage: survives a reload, not a browser restart, and is
-// never baked into the static bundle. Same-origin JavaScript can still read it
-// (including XSS) - the accepted local trust model.
+// --- Human identity ----------------------------------------------------------
+// Identity mode (peer-auth.json present): the server mints a loopback session
+// cookie, so the browser connects with no paste; the token is only used in
+// shared-token mode, where it is pasted once. The token lives in sessionStorage
+// and is never baked into the bundle; same-origin JavaScript can read it (XSS),
+// which the accepted local trust model already covers.
 const HUMAN_TOKEN_KEY = 'lobby.humanToken';
+const DISCONNECTED_KEY = 'lobby.disconnected';
 
 export const getHumanToken = (): string | null => {
   try {
@@ -121,7 +124,26 @@ export const setHumanToken = (token: string | null): void => {
   }
 };
 
-/** Headers for a write call: JSON plus the human token when one is connected. */
+/** True when this tab deliberately disconnected (a reload must not re-connect). */
+export const isDisconnected = (): boolean => {
+  try {
+    return window.sessionStorage.getItem(DISCONNECTED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+export const setDisconnected = (value: boolean): void => {
+  try {
+    if (value) window.sessionStorage.setItem(DISCONNECTED_KEY, '1');
+    else window.sessionStorage.removeItem(DISCONNECTED_KEY);
+  } catch {
+    /* ignore */
+  }
+};
+
+/** Headers for a write call: JSON plus the pasted token, when one exists. The
+ *  browser session rides on the cookie automatically (same origin). */
 const writeHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = getHumanToken();
@@ -134,7 +156,35 @@ export interface Principal {
   kind: 'human' | 'boss' | 'agent';
 }
 
-/** Verifies a pasted token without sending a message (Settings > Connect). */
+export type AuthMode = 'identity' | 'shared-token' | 'open';
+
+export const fetchAuthMode = async (): Promise<AuthMode> =>
+  (await requestJson<{ mode: AuthMode }>('/api/auth-mode')).mode;
+
+/** Loopback auto-connect: mints the browser session cookie. The JSON content
+ *  type and the `x-lobby-connect` header are deliberate - a cross-site form can
+ *  send neither (forms cannot set headers, and `text/plain` is rejected by the
+ *  route), so a hostile page cannot mint or clear a session. */
+export const connectBrowser = async (): Promise<Principal> => {
+  const principal = await requestJson<Principal>('/api/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-lobby-connect': '1' },
+    body: '{}',
+  });
+  setDisconnected(false);
+  return principal;
+};
+
+export const disconnectBrowser = async (): Promise<void> => {
+  setDisconnected(true);
+  await requestJson<{ status: string }>('/api/disconnect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-lobby-connect': '1' },
+    body: '{}',
+  });
+};
+
+/** Verifies the current identity without sending a message. */
 export const fetchPrincipal = async (): Promise<Principal> => {
   const headers = writeHeaders();
   return requestJson<Principal>('/api/principal', { headers });
@@ -184,25 +234,44 @@ export const fetchLastActivity = async (): Promise<Record<string, string | null>
 export const fetchLocalProjects = async (): Promise<string[]> =>
   requestJson<string[]>('/api/local-projects');
 
+/** One automatic reconnect when a write is rejected with 401: a server restart
+ *  empties the session map while the tab still holds the old cookie. Only the
+ *  cookie path can recover this way; a token 401 is surfaced unchanged. */
+const withReconnect = async <T>(fn: () => Promise<T>): Promise<T> => {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401 && getHumanToken() === null && !isDisconnected()) {
+      await connectBrowser().catch(() => null);
+      return fn();
+    }
+    throw err;
+  }
+};
+
 export const sendMessage = async (
   to: string[] | 'all',
   message: string,
   from: 'human' | 'boss' = 'boss',
   messageId?: string,
 ): Promise<{ sent: string[]; skipped: string[] }> =>
-  requestJson<{ sent: string[]; skipped: string[] }>('/send', {
-    method: 'POST',
-    headers: writeHeaders(),
-    body: JSON.stringify({ to, message, from, ...(messageId === undefined ? {} : { messageId }) }),
-  });
+  withReconnect(() =>
+    requestJson<{ sent: string[]; skipped: string[] }>('/send', {
+      method: 'POST',
+      headers: writeHeaders(),
+      body: JSON.stringify({ to, message, from, ...(messageId === undefined ? {} : { messageId }) }),
+    }),
+  );
 
 // Webchat: prompt the boss (like typing in the desktop session).
 export const promptBoss = async (message: string): Promise<{ status: string }> =>
-  requestJson<{ status: string }>('/prompt', {
-    method: 'POST',
-    headers: writeHeaders(),
-    body: JSON.stringify({ message }),
-  });
+  withReconnect(() =>
+    requestJson<{ status: string }>('/prompt', {
+      method: 'POST',
+      headers: writeHeaders(),
+      body: JSON.stringify({ message }),
+    }),
+  );
 
 export const hh = (iso: string): string =>
   new Date(iso).toTimeString().slice(0, 5);

@@ -24,6 +24,7 @@ import { createOpenCodeIntegration, type OpenCodeIntegration } from './integrati
 import { createSessionResolver } from './integrations/opencode/index.js';
 import { ChatMessageRepository } from './modules/chat/infrastructure/message-repository.js';
 import { readPeerAllowlist } from './modules/chat/infrastructure/peer-allowlist.js';
+import { SessionStore } from './api/middleware/session.js';
 import { ChatService } from './modules/chat/application/chat-service.js';
 import { chatRoutes } from './modules/chat/presentation/routes.js';
 import { AgentMirrorRepository } from './modules/agents/infrastructure/agent-mirror-repository.js';
@@ -43,6 +44,11 @@ declare module 'fastify' {
     agents: AgentsService;
   }
 }
+
+/** Pino redaction for every lobby process. Exported so a test can assert the
+ *  real list instead of a copy: `server.ts` is an entry module and cannot be
+ *  imported by a test. */
+export const LOG_REDACTION = ['req.headers.authorization', 'req.headers.cookie'];
 
 export interface BuildAppOptions {
   /** Request logging (Fastify/pino). Default false; server.ts enables it. */
@@ -117,6 +123,9 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
     ports: { prompts: opencode.prompts, sessions: opencode.sessions, bus },
     readAllowlist: () => readPeerAllowlist(config.peerAllowlistPath),
   });
+  // One store per process: browser sessions are server state, like the wake
+  // bookmark, and must not be re-created per request.
+  const sessions = new SessionStore();
   // Fail-closed is correct but silent: an operator who created principals
   // expects the policy file to exist, and a missing one denies every send.
   if (config.peerAuth !== undefined && !existsSync(config.peerAllowlistPath)) {
@@ -139,7 +148,13 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
   app.decorate('chat', chat);
   app.decorate('agents', agentsService);
   app.register(healthRoutes);
-  app.register(chatRoutes, { service: chat, authToken: config.authToken, principals: config.peerAuth });
+  app.register(chatRoutes, {
+    service: chat,
+    authToken: config.authToken,
+    principals: config.peerAuth,
+    sessions,
+    host: config.host,
+  });
   app.register(agentsRoutes, { service: agentsService });
   // Decision-2 compatibility: machine-local projects listing consumed by the
   // dashboard's Projects module (Task-1 ledger ruling).

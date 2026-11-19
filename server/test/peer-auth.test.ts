@@ -1,16 +1,17 @@
 // Principal identities for the send endpoints (peer messaging).
 //
-// `requirePrincipal` maps a bearer token to a principal and sets
-// `request.principal`; `/api/principal` lets the dashboard verify a pasted
-// token without sending a message. With no principal file the whole feature is
-// absent (legacy body-`from` mode), so nothing here is registered.
+// `requireCredential` maps a bearer token (or a browser session cookie) to a
+// principal and sets `request.principal`; `/api/principal` lets the dashboard
+// verify a credential without sending a message. With no principal file the
+// whole feature is absent (legacy body-`from` mode), so nothing here is registered.
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { registerErrorHandler } from '../src/api/plugins/error-handler.js';
-import { requirePrincipal, tokenToPrincipal } from '../src/api/middleware/peer-auth.js';
+import { requireCredential, tokenToPrincipal } from '../src/api/middleware/peer-auth.js';
+import { SessionStore } from '../src/api/middleware/session.js';
 import { loadConfig, type Principal } from '../src/infrastructure/config/index.js';
 
 const dir = (): string => mkdtempSync(join(tmpdir(), 'lobby-peer-auth-'));
@@ -26,9 +27,10 @@ async function appWith(file?: string) {
   const app = Fastify();
   registerErrorHandler(app);
   if (config.peerAuth !== undefined) {
-    const principals = config.peerAuth;
-    app.get('/api/principal', { preHandler: requirePrincipal(principals) }, async (request) => request.principal);
-    app.post('/guarded', { preHandler: requirePrincipal(principals) }, async () => ({ ok: true }));
+    const sessions = new SessionStore();
+    const guard = requireCredential(config.peerAuth, sessions);
+    app.get('/api/principal', { preHandler: guard }, async (request) => request.principal);
+    app.post('/guarded', { preHandler: guard }, async () => ({ ok: true }));
   }
   await app.ready();
   return app;

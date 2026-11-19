@@ -9,6 +9,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Principal } from '../../infrastructure/config/index.js';
 import { AppError } from '../../shared/errors/index.js';
+import { readSessionId, type SessionStore } from './session.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -36,15 +37,29 @@ export function tokenToPrincipal(
   return undefined;
 }
 
-/** Resolves the principal and throws the shared 401 envelope when the token is
- *  missing, malformed or unknown. Use on routes that require an identity. */
-export function requirePrincipal(principals: ReadonlyMap<string, Principal>) {
+function refuse(reply: FastifyReply): never {
+  reply.header('www-authenticate', 'Bearer realm="agents-lobby"');
+  throw new AppError(401, 'unauthorized', 'Missing or invalid bearer token');
+}
+
+/** Bearer token OR browser session cookie. An `Authorization` header that is
+ *  present but invalid is 401 - it never falls back to the cookie, so a revoked
+ *  agent token cannot be silently downgraded to `human`. */
+export function requireCredential(
+  principals: ReadonlyMap<string, Principal>,
+  sessions: SessionStore,
+) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const principal = tokenToPrincipal(principals, request.headers.authorization);
-    if (principal === undefined) {
-      reply.header('www-authenticate', 'Bearer realm="agents-lobby"');
-      throw new AppError(401, 'unauthorized', 'Missing or invalid bearer token');
+    const authorization = request.headers.authorization;
+    if (authorization !== undefined) {
+      const principal = tokenToPrincipal(principals, authorization);
+      if (principal === undefined) refuse(reply);
+      request.principal = principal;
+      return;
     }
+    const id = readSessionId(request.headers.cookie);
+    const principal = id === null ? undefined : sessions.get(id);
+    if (principal === undefined) refuse(reply);
     request.principal = principal;
   };
 }
