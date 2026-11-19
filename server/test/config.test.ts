@@ -8,14 +8,15 @@ import { tempDir } from './helpers.js';
 
 describe('loadConfig', () => {
   it('defaults to host 127.0.0.1, port 3006, 1 MB body limit, open local access', () => {
-    const cfg = loadConfig({ env: {}, authFile: join(tempDir(), 'absent.json') });
+    const cfg = loadConfig({ env: {}, authFile: join(tempDir(), 'absent.json'), peerAuthFile: join(tempDir(), 'absent-peer.json') });
     expect(cfg).toEqual({
       host: '127.0.0.1',
       port: 3006,
       bodyLimit: 1_048_576,
       dbPath: '.data/dev.db',
       opencodeTimeoutMs: 30_000,
-      registryPath: 'agents.json',
+      registryPath: 'config/agents.json',
+      peerAllowlistPath: 'config/peer-to-peer-allowlist.json',
       projectsDir: './projects',
     });
     expect(cfg.authToken).toBeUndefined();
@@ -32,7 +33,7 @@ describe('loadConfig', () => {
         LOBBY_OPENCODE_TIMEOUT_MS: '5000',
         LOBBY_OPENCODE_SERVER_URL: 'http://127.0.0.1:9999',
       },
-      authFile: join(tempDir(), 'absent.json'),
+      authFile: join(tempDir(), 'absent.json'), peerAuthFile: join(tempDir(), 'absent-peer.json'),
     });
     expect(cfg).toEqual({
       host: '0.0.0.0',
@@ -41,13 +42,14 @@ describe('loadConfig', () => {
       dbPath: 'X:/tmp/lobby.db',
       opencodeTimeoutMs: 5000,
       opencodeServerUrl: 'http://127.0.0.1:9999',
-      registryPath: 'agents.json',
+      registryPath: 'config/agents.json',
+      peerAllowlistPath: 'config/peer-to-peer-allowlist.json',
       projectsDir: './projects',
     });
   });
 
   it('rejects an invalid OpenCode server URL', () => {
-    expect(() => loadConfig({ env: { LOBBY_OPENCODE_SERVER_URL: 'not a url' }, authFile: join(tempDir(), 'absent.json') }))
+    expect(() => loadConfig({ env: { LOBBY_OPENCODE_SERVER_URL: 'not a url' }, authFile: join(tempDir(), 'absent.json'), peerAuthFile: join(tempDir(), 'absent-peer.json') }))
       .toThrow();
   });
 

@@ -29,15 +29,16 @@ async function until(probe: () => boolean, what: string, timeoutMs = 2000): Prom
   }
 }
 
-/** Seed two slice rows (agent → human, webhook NULL-receiver) like the
- *  Nov-16 duplicate: both belong in one wake slice. */
+/** Seed two slice rows (both addressed to the boss: one named, one legacy
+ *  null-receiver) - the Nov-16 duplicate pattern, under the current rule that
+ *  the wake carries only boss-addressed traffic. */
 function seedRows(fixture: ReturnType<typeof makeChatFixture>): void {
-  fixture.store.insert({ ts: '2026-11-17T09:01:00.000Z', from: 'greg', to: 'human', body: 'greg line', sessionId: null });
+  fixture.store.insert({ ts: '2026-11-17T09:01:00.000Z', from: 'greg', to: 'boss', body: 'greg line', sessionId: null });
   fixture.store.insert({ ts: '2026-11-17T09:02:00.000Z', from: 'porty', to: null, body: 'porty line', sessionId: null });
 }
 
 const expectedSlice = composeWakePrompt([
-  { time: '2026-11-17T09:01:00.000Z', from: 'greg', to: 'human', text: 'greg line' },
+  { time: '2026-11-17T09:01:00.000Z', from: 'greg', to: 'boss', text: 'greg line' },
   { time: '2026-11-17T09:02:00.000Z', from: 'porty', to: null, text: 'porty line' },
 ]);
 
@@ -55,14 +56,12 @@ describe('single-flight wake (no overlap, no row loss)', () => {
     const w2 = f.service.wakeBoss();
     // Both attempts are past their registry read; the race window is open.
     await until(() => f.opencode.promptCalls.length >= 1, 'the first wake prompt');
-    f.opencode.releasePrompts('ses_boss'); // complete the in-flight prompt(s)
-    await until(() => f.opencode.promptCalls.length >= 2, 'the second wake prompt');
-    f.opencode.releasePrompts('ses_boss'); // complete any re-check wake
+    f.opencode.releasePrompts('ses_boss'); // complete the in-flight prompt
     await Promise.all([w1, w2]);
-    // Each row delivered at most once: exactly ONE wake carries the slice;
-    // any other wake is the bare prompt over an empty (already-claimed) slice.
-    const sliced = f.opencode.promptCalls.filter((c) => c.text !== WAKE_PROMPT);
-    expect(sliced.map((c) => c.text)).toEqual([expectedSlice]);
+    // Each row delivered at most once: exactly ONE wake carries the slice.
+    // The second wake re-checks and finds nothing unread, so it prompts nobody
+    // (an empty wake would be pure noise).
+    expect(f.opencode.promptCalls.map((c) => c.text)).toEqual([expectedSlice]);
   });
 
   it('a failed wake does not consume the rows: the follow-up wake still delivers them', async () => {

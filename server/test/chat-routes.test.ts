@@ -36,7 +36,9 @@ interface Ctx {
   bus: EventBus;
 }
 
-function setup(opts: { registry?: unknown; authToken?: boolean } = {}): Ctx {
+function setup(
+  opts: { registry?: unknown; authToken?: boolean; peerAuth?: Record<string, { name: string; kind: string }> } = {},
+): Ctx {
   const dir = tempDir();
   const registryPath = join(dir, 'agents.json');
   if (opts.registry !== undefined) {
@@ -46,8 +48,11 @@ function setup(opts: { registry?: unknown; authToken?: boolean } = {}): Ctx {
   const env: Record<string, string> = { LOBBY_REGISTRY_PATH: registryPath };
   const authFile = opts.authToken ? join(dir, 'server.auth.json') : join(dir, 'absent.auth.json');
   if (opts.authToken) writeFileSync(authFile, JSON.stringify({ authToken: 'secret123' }));
-  const dbPath = makeConfig(dir, env, authFile).dbPath;
-  const app = buildApp(makeConfig(dir, env, authFile), { opencode: opencode.integration });
+  const peerAuthFile = join(dir, 'peer-auth.json');
+  if (opts.peerAuth) writeFileSync(peerAuthFile, JSON.stringify({ tokens: opts.peerAuth }));
+  const config = makeConfig(dir, env, authFile, opts.peerAuth ? peerAuthFile : undefined);
+  const dbPath = config.dbPath;
+  const app = buildApp(config, { opencode: opencode.integration });
   // Seeding uses a SEPARATE short-lived connection to the same file (the app
   // owns its own); opened lazily so app.close() never races it.
   let raw: Database.Database | null = null;

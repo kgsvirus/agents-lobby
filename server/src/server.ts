@@ -5,7 +5,12 @@ import { buildApp } from './app.js';
 import { loadConfig } from './infrastructure/config/index.js';
 
 const config = loadConfig();
-const app = buildApp(config, { logger: true });
+const app = buildApp(config, {
+  logger: true,
+  // Bearer tokens must never reach the log: pino redacts the auth header on
+  // every request line (peer messaging adds per-principal tokens).
+  loggerRedact: ['req.headers.authorization'],
+});
 
 try {
   await app.listen({ host: config.host, port: config.port });

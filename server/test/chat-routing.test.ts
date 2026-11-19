@@ -92,9 +92,14 @@ describe('ChatService.handleEvent — capture policy (bridge.mjs:166-204)', () =
     ]);
   });
 
-  it('routes an agent reply to the recorded /send sender (lastPromptFrom)', async () => {
+  it('routes an agent reply to the sender of the prompt it OBSERVED arriving (not the last send)', async () => {
     const f = makeChatFixture(registry);
     await f.service.sendMessage({ to: 'taskflow', message: 'do the thing', from: 'human' });
+    // The lobby sees its own prompt land in the target session: that is the
+    // attribution point (prefix -> sender).
+    await f.service.handleEvent({
+      kind: 'inbox', from: 'human', to: 'taskflow', body: 'Human: do the thing', sessionId: 'ses_taskflow', ts: '2026-11-17T10:00:30.000Z',
+    });
     await f.service.handleEvent({
       kind: 'reply', from: 'taskflow', to: null, body: 'done', sessionId: 'ses_taskflow', ts: '2026-11-17T10:01:00.000Z',
     });
@@ -104,20 +109,14 @@ describe('ChatService.handleEvent — capture policy (bridge.mjs:166-204)', () =
     ]);
   });
 
-  it('records lastPromptFrom BEFORE the prompt resolves (reply may race the send, bridge.mjs:416)', async () => {
+  it('a reply with no observed inbound falls back to boss (never to a stale peer)', async () => {
     const f = makeChatFixture(registry);
-    f.opencode.holdPrompts.add('ses_taskflow'); // prompt never resolves
-    const send = f.service.sendMessage({ to: 'taskflow', message: 'go', from: 'human' });
-    // Flush microtasks so the send's registry read + lastPromptFrom recording
-    // have happened, while the prompt itself is still held open.
-    await new Promise((r) => setTimeout(r, 0));
-    // The reply event arrives while the prompt is still in flight.
+    f.opencode.holdPrompts.add('ses_taskflow'); // prompt never observed (no inbox event)
+    void f.service.sendMessage({ to: 'taskflow', message: 'go', from: 'human' });
     await f.service.handleEvent({
       kind: 'reply', from: 'taskflow', to: null, body: 'early reply', sessionId: 'ses_taskflow', ts: '2026-11-17T10:00:00.000Z',
     });
-    expect(savedRows(f).map((r) => [r.from, r.to])).toEqual([['taskflow', 'human']]);
-    // The send itself stays pending (held prompt) — the recording happened
-    // before the prompt could resolve, which is the whole point of the test.
+    expect(savedRows(f).map((r) => [r.from, r.to])).toEqual([['taskflow', 'boss']]);
   });
 
   it('wakes the boss after an agent reply — the slice carries the reply line (bridge.mjs:111-118)', async () => {

@@ -129,15 +129,25 @@ export interface ChatFixture {
 }
 
 /** A ChatService over a fresh temp db (real store + real bus, injected fakes
- *  for the registry and the OpenCode ports). */
-export function makeChatFixture(registry: ChatRegistry, opencode = fakeOpenCode()): ChatFixture & { opencode: FakeOpenCode } {
+ *  for the registry and the OpenCode ports). `allowlist` installs the
+ *  peer-to-peer policy reader (absent = peer messaging off). */
+export function makeChatFixture(
+  registry: ChatRegistry,
+  opencode = fakeOpenCode(),
+  allowlist?: Readonly<Record<string, readonly string[]>>,
+): ChatFixture & { opencode: FakeOpenCode } {
   const dir = tempDir();
   const dbPath = join(dir, 'chat.db');
   const { sqlite, db } = openDatabase(dbPath);
   runMigrations(db, migrationsFolder());
   const bus = new EventBus(sqlite);
   const store = new ChatMessageRepository(sqlite);
-  const service = new ChatService({ store, registry, ports: { prompts: opencode.integration.prompts, sessions: opencode.integration.sessions, bus } });
+  const service = new ChatService({
+    store,
+    registry,
+    ports: { prompts: opencode.integration.prompts, sessions: opencode.integration.sessions, bus },
+    ...(allowlist === undefined ? {} : { readAllowlist: async () => allowlist }),
+  });
   return { dir, dbPath, bus, store, service, opencode };
 }
 

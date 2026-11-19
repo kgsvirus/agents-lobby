@@ -98,6 +98,48 @@ export const requestJson = async <T>(path: string, init?: RequestInit): Promise<
 
 export const fetchAgents = async (): Promise<Agent[]> => requestJson<Agent[]>('/api/agents');
 
+// --- Human token (peer messaging) --------------------------------------------
+// Stored in sessionStorage: survives a reload, not a browser restart, and is
+// never baked into the static bundle. Same-origin JavaScript can still read it
+// (including XSS) - the accepted local trust model.
+const HUMAN_TOKEN_KEY = 'lobby.humanToken';
+
+export const getHumanToken = (): string | null => {
+  try {
+    return window.sessionStorage.getItem(HUMAN_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const setHumanToken = (token: string | null): void => {
+  try {
+    if (token === null || token === '') window.sessionStorage.removeItem(HUMAN_TOKEN_KEY);
+    else window.sessionStorage.setItem(HUMAN_TOKEN_KEY, token);
+  } catch {
+    /* storage unavailable (private mode): sends stay unauthenticated */
+  }
+};
+
+/** Headers for a write call: JSON plus the human token when one is connected. */
+const writeHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = getHumanToken();
+  if (token !== null) headers.Authorization = `Bearer ${token}`;
+  return headers;
+};
+
+export interface Principal {
+  name: string;
+  kind: 'human' | 'boss' | 'agent';
+}
+
+/** Verifies a pasted token without sending a message (Settings > Connect). */
+export const fetchPrincipal = async (): Promise<Principal> => {
+  const headers = writeHeaders();
+  return requestJson<Principal>('/api/principal', { headers });
+};
+
 export interface MessagePage {
   messages: Message[];
   hasMore: boolean; // more rows exist in the fetch direction (upward: older remain)
@@ -146,18 +188,19 @@ export const sendMessage = async (
   to: string[] | 'all',
   message: string,
   from: 'human' | 'boss' = 'boss',
+  messageId?: string,
 ): Promise<{ sent: string[]; skipped: string[] }> =>
   requestJson<{ sent: string[]; skipped: string[] }>('/send', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to, message, from }),
+    headers: writeHeaders(),
+    body: JSON.stringify({ to, message, from, ...(messageId === undefined ? {} : { messageId }) }),
   });
 
 // Webchat: prompt the boss (like typing in the desktop session).
 export const promptBoss = async (message: string): Promise<{ status: string }> =>
   requestJson<{ status: string }>('/prompt', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: writeHeaders(),
     body: JSON.stringify({ message }),
   });
 

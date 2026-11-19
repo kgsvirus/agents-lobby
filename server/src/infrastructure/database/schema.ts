@@ -3,7 +3,7 @@
 // the `from`/`to`/`text` names are wire aliases only), plus the adjudicated
 // `events` table: one shared monotonic sequence used as the single
 // `Last-Event-ID` cursor for ALL SSE event types (assessment §7).
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const messages = sqliteTable(
   'messages',
@@ -14,10 +14,22 @@ export const messages = sqliteTable(
     receiver: text('receiver'),
     body: text('body').notNull(),
     sessionId: text('session_id'),
+    // Peer-messaging columns (PT-2). `message_id` is the client-supplied
+    // idempotency key: unique, so a retried peer send cannot archive twice.
+    messageId: text('message_id'),
+    // Armed by a peer `/send`: the sender's own turn transcript must not be
+    // archived as a second message. Cleared on that session's next inbound.
+    captureSuppressed: integer('capture_suppressed', { mode: 'boolean' }).notNull().default(false),
+    // 0 = queued but not confirmed delivered, 1 = delivered or legacy row,
+    // 2 = startup reconciliation retried it and gave up (once, ever).
+    deliveryState: integer('delivery_state').notNull().default(1),
   },
   (table) => [
     index('idx_msg_receiver').on(table.receiver, table.id),
     index('idx_msg_sender').on(table.sender, table.id),
+    // Idempotency is SENDER-SCOPED: keys are client chosen, so the pair is the
+    // identity of a logical send, never a global name one agent could squat.
+    uniqueIndex('idx_msg_message_id').on(table.messageId, table.sender),
   ],
 );
 

@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   fetchAgents,
+  getHumanToken,
   promptBoss,
   readErrorEnvelope,
   requestJson,
   sendMessage,
+  setHumanToken,
 } from '../src/lib/api';
 
 const jsonResponse = (status: number, body: unknown): Response =>
@@ -103,6 +105,56 @@ describe('fetchAgents', () => {
       vi.fn(async () => jsonResponse(200, [{ name: 'boss', project: 'Agents-Lobby' }])),
     );
     await expect(fetchAgents()).resolves.toEqual([{ name: 'boss', project: 'Agents-Lobby' }]);
-    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe('/api/agents'); // exact path — no query (server 404s those)
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe('/api/agents'); // exact path - no query (server 404s those)
+  });
+});
+
+// --- Human token (peer messaging) -------------------------------------------
+describe('human token', () => {
+  const store = new Map<string, string>();
+
+  const stubStorage = () => {
+    vi.stubGlobal('window', {
+      sessionStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+    });
+  };
+
+  afterEach(() => {
+    store.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it('sends no Authorization header when no token is connected', async () => {
+    stubStorage();
+    const fetchMock = vi.fn(async () => jsonResponse(200, { sent: ['a'], skipped: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    await sendMessage(['a'], 'hello', 'human');
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+  });
+
+  it('attaches the token to /send and /prompt when connected', async () => {
+    stubStorage();
+    setHumanToken('t');
+    const fetchMock = vi.fn(async () => jsonResponse(200, { sent: ['a'], skipped: [], status: 'ok' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await sendMessage(['a'], 'hello', 'human');
+    await promptBoss('hi');
+    for (const call of fetchMock.mock.calls) {
+      const init = (call as unknown as [string, RequestInit])[1];
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer t');
+    }
+  });
+
+  it('stores and clears the token', () => {
+    stubStorage();
+    setHumanToken('t');
+    expect(getHumanToken()).toBe('t');
+    setHumanToken(null);
+    expect(getHumanToken()).toBeNull();
   });
 });

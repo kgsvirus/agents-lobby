@@ -11,7 +11,7 @@
 // columns (rowid alias — cannot be null under either declaration); the fresh
 // db additionally contains the `events` table.
 import { describe, expect, it } from 'vitest';
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,7 +80,12 @@ function expectSchemaMatch(legacy: Database.Database, fresh: Database.Database):
 
     const legacyCols = columns(legacy, table);
     const freshCols = columns(fresh, table);
-    expect(freshCols.map((c) => c.name)).toEqual(legacyCols.map((c) => c.name)); // same order
+    // Legacy columns keep their names, order and types; ADDITIVE migrations may
+    // append new columns (0005 added the peer-messaging trio), so the legacy
+    // list must be a PREFIX of the migrated list, not the whole list.
+    const legacyNames = legacyCols.map((c) => c.name);
+    const freshNames = freshCols.map((c) => c.name);
+    expect(freshNames.slice(0, legacyNames.length)).toEqual(legacyNames);
     for (const legacyCol of legacyCols) {
       const freshCol = freshCols.find((c) => c.name === legacyCol.name);
       if (freshCol === undefined) throw new Error(`column ${table}.${legacyCol.name} missing in migrated schema`);
@@ -225,8 +230,9 @@ describe('baseline migration', () => {
       expectSchemaMatch(before, isolated.sqlite);
 
       // Baseline recorded + events cursor present. The journal now holds the
-      // baseline AND the additive migrations (projects/agents Phase 5; PK-less
-      // rowid rebuild Phase 5 fix round; registry_mirror dropped in 0004).
+      // baseline AND every additive migration (projects/agents Phase 5; PK-less
+      // rowid rebuild Phase 5 fix round; registry_mirror dropped in 0004; the
+      // peer-messaging columns in 0005).
       expect(tables(isolated.sqlite)).toContain('events');
       expect(tables(isolated.sqlite)).toEqual(expect.arrayContaining(['agents', 'projects']));
       expect(tables(isolated.sqlite)).not.toContain('registry_mirror');
@@ -234,8 +240,15 @@ describe('baseline migration', () => {
         .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = '__drizzle_migrations'")
         .get() as { n: number };
       expect(journal.n).toBe(1);
-      const applied = isolated.sqlite.prepare('SELECT COUNT(*) AS n FROM __drizzle_migrations').get();
-      expect(applied).toEqual({ n: 5 });
+      const applied = isolated.sqlite.prepare('SELECT COUNT(*) AS n FROM __drizzle_migrations').get() as { n: number };
+      // Exact, without a hand-edited number: the applied count must equal the
+      // journal's entry count (a dropped or unapplied migration fails here).
+      const journalEntries = (
+        JSON.parse(
+          readFileSync(join(migrationsFolder(), 'meta', '_journal.json'), 'utf8'),
+        ) as { entries: unknown[] }
+      ).entries.length;
+      expect(applied.n).toBe(journalEntries);
       isolated.sqlite.close();
     } finally {
       before.close();

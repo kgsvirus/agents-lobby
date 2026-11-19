@@ -6,6 +6,7 @@
 // No Fastify, no drizzle, no OpenCode-specific logic here.
 // Both port types come through the adapter's ENTRY SURFACE (index.ts).
 import type { EventBus } from '../../../infrastructure/events/bus.js';
+import type { PeerAllowlist } from '../domain/allowlist.js';
 import type {
   OpenCodePromptPort,
   OpenCodeSessionPort,
@@ -49,13 +50,37 @@ export interface ChatMessageStore {
   unread(consumer: string): WireMessageRow[];
   markSeen(consumer: string, throughId: number): void;
   lastActivity(agentNames: readonly string[]): Record<string, string | null>;
+  /** The single row archived under a client idempotency key, SCOPED TO ITS
+   *  SENDER: keys are client-chosen, so one agent must not be able to claim
+   *  another agent's key. Null = the logical send was never archived. */
+  findOwnMessage(messageId: string, sender: string): { message: WireMessageRow; deliveryState: number } | null;
+  /** True when an insert lost the unique-index race to a concurrent instance
+   *  (the idempotent-hit case, not an error). */
+  isMessageIdConflict(err: unknown): boolean;
+  /** True while a peer `/send` from this session still owns its delivery turn
+   *  (its `text.ended` transcript must not be archived as a second message). */
+  isCaptureSuppressed(sessionId: string): boolean;
+  /** Turn boundary reached: this session received its next inbound prompt. */
+  clearCaptureSuppressed(sessionId: string): void;
+  /** Startup: no turn survives a restart, so every arm is stale. */
+  clearAllCaptureSuppressed(): void;
+  /** The prompt for this row was accepted by OpenCode. */
+  markDeliverySent(id: number): void;
+  /** Startup reconciliation retried this row and will not try again. */
+  markDeliveryRetried(id: number): void;
+  /** Peer rows archived but never confirmed delivered (delivery_state 0). */
+  unconfirmedPeerDeliveries(): WireMessageRow[];
 }
 
-/** One registry entry (agents.json shape; agents.example.json). */
+/** One registry entry (agents.json shape; agents.example.json). `role` is the
+ *  peer-messaging role; absent means the agent cannot send or be addressed as
+ *  a peer role (fail closed). It is deliberately NOT mirrored to the db or the
+ *  /api/agents output - it is policy input, not dashboard data. */
 export interface RegistryEntry {
   readonly name: string;
   readonly project: string;
   readonly session: string;
+  readonly role?: string;
 }
 
 /** A validated registry snapshot. The boss is null only in the documented
@@ -87,10 +112,17 @@ export interface ChatPorts {
   readonly bus: Pick<EventBus, 'transaction'>;
 }
 
+/** `config/peer-to-peer-allowlist.json`: ROLE -> allowed recipient ROLES.
+ *  An empty object means no peer may send (fail closed). */
+export type { PeerAllowlist };
+
 export interface ChatDeps {
   readonly store: ChatMessageStore;
   readonly registry: ChatRegistry;
   readonly ports: ChatPorts;
+  /** Reads the allowlist fresh per send (the composition root passes
+   *  readPeerAllowlist). Undefined = the feature is off: peers are rejected. */
+  readonly readAllowlist?: () => Promise<PeerAllowlist>;
   /** Total SQLITE_BUSY retry budget for the ingest transaction (review round
    *  3): every attempt's synchronous driver busy_timeout wait is capped to a
    *  brief interval, the attempts are separated by an ASYNC nap that yields

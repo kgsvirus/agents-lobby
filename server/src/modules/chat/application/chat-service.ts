@@ -24,7 +24,10 @@ import type {
   WireMessageRow,
 } from '../domain/message.js';
 import { wakeSliceRows } from '../domain/message.js';
-import type { ChatDeps, RegistrySnapshot } from './ports.js';
+import { isPairAllowed } from '../domain/allowlist.js';
+import { agentsWithRole, roleOfPrincipal } from '../domain/roles.js';
+import { composePrompt, isComposablePeerName, parsePromptSender, type PromptSender } from '../domain/prefix.js';
+import type { ChatDeps, PeerAllowlist, RegistryEntry, RegistrySnapshot } from './ports.js';
 
 /** Total ingest busy-retry budget (review round 3, final-review fix 2). The
  *  driver busy_timeout (openDatabase, 5 s) is the FIRST line: BEGIN IMMEDIATE
@@ -77,13 +80,44 @@ export interface SendInput {
   readonly to: string | readonly string[];
   readonly message: string;
   readonly from?: string;
+  /** True when `from` came from a credential (peer path): the allowlist,
+   *  prefix reservation and idempotency rules apply. False/absent = the legacy
+   *  body-`from` mode (human | boss only). */
+  readonly authenticated?: boolean;
+  /** Client idempotency key of an explicit peer send (`msg_...`). */
+  readonly messageId?: string;
+}
+
+export interface SendResult {
+  readonly sent: string[];
+  readonly skipped: string[];
+  /** Echo of the archived idempotency key (absent in legacy mode). */
+  readonly messageId?: string;
+}
+
+/** Peer idempotency keys: `msg_` + url-safe characters, so the same value can
+ *  be handed to OpenCode's prompt id if that is ever proven idempotent. */
+const PEER_MESSAGE_ID = /^msg_[A-Za-z0-9_-]+$/;
+
+/** Everything a peer may never compose: the two authority prefixes. Matched
+ *  case-insensitively and tolerating spacing (`boss:`, `BOSS:`, `Human :`). */
+const RESERVED_PREFIX = /^(human|boss)\s*:/i;
+
+function senderOf(name: string): PromptSender {
+  if (name === 'human') return { kind: 'human' };
+  if (name === BOSS) return { kind: 'boss' };
+  return { kind: 'peer', name };
 }
 
 export class ChatService {
-  /** Who last prompted each agent (human | boss) — an agent's reply is routed
-   *  to its last prompter, default "boss" when history is unknown
-   *  (bridge.mjs:51-53,195; in-memory, lost on restart, fallback preserved). */
-  readonly #lastPromptFrom = new Map<string, string>();
+  /** Pending reply attribution, keyed by the RECIPIENT session: set when the
+   *  lobby's own prompt is observed arriving on that session's inbox (the
+   *  prefix names the sender), consumed by the first captured reply. A reply
+   *  with no pending entry falls back to boss - never to a stale peer. */
+  readonly #pendingReplyTo = new Map<string, string>();
+  /** Sessions whose arm could not be cleared (SQLITE_BUSY). The arm must fail
+   *  OPEN, so the next capture archives instead of being suppressed. */
+  readonly #unclearedArms = new Set<string>();
   /** Single-flight wake serialization (work order Task 1.3): every wakeBoss()
    *  attempt queues behind the previous one, so the read → prompt → bookmark
    *  sequence never overlaps itself (two overlapping wakes sliced the same
@@ -102,12 +136,15 @@ export class ChatService {
   readonly #registry: ChatDeps['registry'];
   readonly #ports: ChatDeps['ports'];
   readonly #busyRetryBudgetMs: number;
+  /** Allowlist reader (fresh per send). Undefined = peer messaging is off. */
+  readonly #readAllowlist: ChatDeps['readAllowlist'];
 
   constructor(deps: ChatDeps) {
     this.#store = deps.store;
     this.#registry = deps.registry;
     this.#ports = deps.ports;
     this.#busyRetryBudgetMs = deps.busyRetryBudgetMs ?? BUSY_RETRY_BUDGET_MS;
+    this.#readAllowlist = deps.readAllowlist;
   }
 
   // --- Queries --------------------------------------------------------------
@@ -134,14 +171,33 @@ export class ChatService {
 
   // --- Capture (the bridge's listener flow, bridge.mjs:166-204) --------------
 
-  /** Consumes one Phase 3 NormalizedEvent: boss-only filter + echo suppression
-   *  for human input; reply capture with lastPromptFrom routing and the boss
-   *  wake trigger for agent replies. */
+  /** Consumes one Phase 3 NormalizedEvent: boss-only capture for human input,
+   *  observed-inbound reply attribution, the peer delivery-turn suppressor, and
+   *  the boss wake trigger (peer-to-peer traffic does not wake boss). */
   async handleEvent(event: NormalizedEvent): Promise<void> {
     if (event.kind === 'inbox') {
-      // Boss session only — the normalized `to` is the resolved session-owner
-      // name, so the domain comparison is against the boss identity.
-      if (event.to !== BOSS) return;
+      // A delivered prompt is the session's next-turn boundary: whatever a
+      // peer send armed is over (the body is already archived). The event is
+      // an ENQUEUE, so it can also arrive while the send's own turn is still
+      // running - that only costs a duplicate transcript row, never a lost
+      // reply, which is the trade-off this design accepts.
+      if (event.to !== BOSS) {
+        this.#clearArmed(event.sessionId);
+        // Agent session input: attribute the NEXT captured reply to the sender
+        // the lobby composed into the prefix. O02: typing straight into a
+        // desktop session emits no event at all, so it cannot set this.
+        const sender = parsePromptSender(event.body);
+        if (sender !== null) {
+          this.#pendingReplyTo.set(event.to, sender.kind === 'peer' ? sender.name : sender.kind);
+        } else {
+          // An unprefixed inbound (e.g. a direct OpenCode prompt, which
+          // bypasses the lobby) is not the peer prompt we were waiting on:
+          // drop the pending entry so the reply fails toward boss, never
+          // toward a stale peer.
+          this.#pendingReplyTo.delete(event.to);
+        }
+        return;
+      }
       // Skip the synthetic echoes (already logged by /send) and the bridge's
       // own wake prompt (plain, or carrying the unread slice) — only genuine
       // human input logs. A real message that merely BEGINS with the wake text
@@ -171,7 +227,33 @@ export class ChatService {
       }, true);
       return;
     }
-    const replyTo = this.#lastPromptFrom.get(event.from) ?? BOSS;
+    // A peer send's own delivery turn is transcript, not a message: its body
+    // was archived byte-for-byte when /send was accepted. A read failure here
+    // must not lose a capture - archive instead, and the next inbound clears.
+    let suppressed = false;
+    try {
+      suppressed = this.#store.isCaptureSuppressed(event.sessionId);
+    } catch (err) {
+      console.warn('[chat] capture-suppression read failed (archiving):', err);
+    }
+    if (suppressed && this.#unclearedArms.delete(event.sessionId)) {
+      // A previous clear failed: fail OPEN. Archive this reply and try the
+      // clear again, rather than suppressing a message that was never sent.
+      this.#clearArmed(event.sessionId);
+      suppressed = false;
+    }
+    if (suppressed) {
+      // Consume the arm: this one transcript is skipped, and the next turn is
+      // archived normally (a multi-segment turn's later segments therefore
+      // archive - duplicate noise, never a lost reply).
+      this.#clearArmed(event.sessionId);
+      return;
+    }
+    // Single-use attribution: the prompt actually being answered wins, and a
+    // reply with no observed inbound falls back to boss (never to a stale peer).
+    const pending = this.#pendingReplyTo.get(event.from);
+    this.#pendingReplyTo.delete(event.from);
+    const replyTo = pending ?? BOSS;
     await this.#save({
       ts: event.ts,
       from: event.from,
@@ -179,9 +261,12 @@ export class ChatService {
       body: event.body,
       sessionId: event.sessionId,
     }, true);
-    // An agent answered — wake the boss (coalesced, same as webhook; the
-    // bridge does not await it, bridge.mjs:203).
-    void this.wakeBoss();
+    // Wake boss only when the row will actually be IN the slice - i.e. the
+    // reply addresses boss. A reply to the human (or a peer) is archived but
+    // must not wake anyone: the wake would carry nothing.
+    if (replyTo === BOSS) {
+      void this.wakeBoss();
+    }
   }
 
   /** One atomic ingest: message row + message.created event commit together
@@ -279,10 +364,11 @@ export class ChatService {
 
   /** Wake the boss with an inline unread slice. Token-free coalescing first
    *  (a pending user input item means a wake is already queued — zero tokens);
-   *  the slice excludes what the boss session already has natively; the
-   *  bookmark advances only THROUGH the slice so rows inserted during the
-   *  enqueue await stay unread; an empty slice sends the bare wake prompt and
-   *  moves no bookmark. */
+   *  the slice excludes what the boss session already has natively AND
+   *  peer-to-peer traffic; the bookmark advances through the whole unread
+   *  SNAPSHOT taken before the enqueue await (so filtered rows are not
+   *  re-read, and rows landing during the await stay unread); an empty slice
+   *  sends the bare wake prompt. */
   async wakeBoss(): Promise<void> {
     // Single-flight wake (work order Task 1.3): a second wake call queues
     // behind the in-flight one and RE-CHECKS (coalescing + unread) after it
@@ -297,10 +383,11 @@ export class ChatService {
 
   /** One serialized wake attempt (bridge.mjs:98-130). Token-free coalescing
    *  first (a pending user input item means a wake is already queued — zero
-   *  tokens); the slice excludes what the boss session already has natively;
-   *  the bookmark advances only THROUGH the slice so rows inserted during
-   *  the enqueue await stay unread; an empty slice sends the bare wake
-   *  prompt and moves no bookmark. */
+   *  tokens); the slice excludes what the boss session already has natively
+   *  AND peer-to-peer traffic. The bookmark advances through the whole unread
+   *  SNAPSHOT taken before the enqueue await (not only the slice: filtered
+   *  rows would otherwise be re-read on every wake), so rows arriving after
+   *  the snapshot stay unread. An empty slice sends the bare wake prompt. */
   async #wakeAttempt(): Promise<void> {
     // bridge.mjs:99-100 — no effective server URL → cannot wake, loud log.
     if (!this.#ports.prompts.isAvailable()) {
@@ -321,14 +408,22 @@ export class ChatService {
         console.log('[chat] Boss wake already pending, skipping.');
         return;
       }
-      const rows = wakeSliceRows(this.#store.unread(BOSS));
+      const unread = this.#store.unread(BOSS);
+      if (unread.length === 0) {
+        // Nothing new since the last wake: a second wake fired by a burst of
+        // replies would otherwise prompt the boss with an empty slice.
+        return;
+      }
+      const rows = wakeSliceRows(unread);
       const text = composeWakePrompt(
         rows.map((r) => ({ time: r.time, from: r.from, to: r.to, text: r.text })),
       );
       await this.#ports.prompts.prompt(bossSession, text);
-      // Bookmark only through the captured slice — a no-arg markSeen here
-      // could swallow rows arriving during the enqueue await.
-      const last = rows.at(-1);
+      // Bookmark through the whole unread SNAPSHOT, not just the slice: rows
+      // deliberately kept out of the slice (boss's own, and peer-to-peer
+      // traffic) would otherwise be re-read and re-filtered on every wake.
+      // Snapshotting before the await keeps rows arriving meanwhile unread.
+      const last = unread.at(-1);
       if (last !== undefined) this.#store.markSeen(BOSS, last.id);
       console.log('[chat] Boss wake prompt enqueued.');
     } catch (err) {
@@ -338,18 +433,27 @@ export class ChatService {
 
   // --- /send fan-out (bridge.mjs:390-443) ------------------------------------
 
-  /** Fan out `message` to the resolved targets: `to === 'all'` → every registry
-   *  agent; otherwise exact-name or array-membership match. One prompt per
-   *  target; lastPromptFrom is recorded BEFORE the await (a reply may race the
-   *  send, bridge.mjs:416); failures isolate per target (allSettled) →
-   *  {sent, skipped}; the saved row's `to` is the JOINED SUCCESSFUL targets
-   *  only (bridge.mjs:427-433). */
-  async sendMessage(input: SendInput): Promise<{ sent: string[]; skipped: string[] }> {
+  /** Resolve `message` to its recipients and deliver it.
+   *
+   *  Legacy mode (no credential -> `authenticated` false): `from` is the body
+   *  value, human | boss only, unchanged fan-out semantics (bridge.mjs:390-443).
+   *
+   *  Peer mode (a credential decided `from`): the sender may be an agent. A
+   *  peer sends to exactly ONE recipient, must be allowed by the contact
+   *  allowlist, and carries a `msg_...` idempotency key. Its exact body is
+   *  archived BEFORE delivery (single writer), the row arms the sender-turn
+   *  capture suppressor, and the delivery state tracks confirmation. */
+  async sendMessage(input: SendInput): Promise<SendResult> {
     const text = (input.message || '').trim();
     if (!text) throw new AppError(400, 'invalid_input', 'message is required');
-    const sender = input.from ?? 'boss';
-    if (sender !== 'human' && sender !== 'boss') {
-      throw new AppError(400, 'invalid_sender', "from must be 'human' or 'boss'");
+    const authenticated = input.authenticated === true;
+    const senderName = input.from ?? (authenticated ? '' : 'boss');
+    if (!authenticated) {
+      if (senderName !== 'human' && senderName !== 'boss') {
+        throw new AppError(400, 'invalid_sender', "from must be 'human' or 'boss'");
+      }
+    } else if (senderName === '') {
+      throw new AppError(401, 'unauthorized', 'authenticated sender required');
     }
     // bridge.mjs:399-400 — the bridge fails fast (500) when no OpenCode server
     // URL was discovered, BEFORE resolving targets. Neutral availability
@@ -358,22 +462,41 @@ export class ChatService {
       throw new AppError(500, 'upstream_unavailable', 'OpenCode server URL not discovered');
     }
     const registry = await this.#registry.read();
-    const { to } = input;
-    const targets =
-      to === 'all'
-        ? [...registry.agents]
-        : registry.agents.filter(
-            (a) => to === a.name || (Array.isArray(to) && to.includes(a.name)),
-          );
-    if (targets.length === 0) {
+    const sender = senderOf(senderName);
+    if (sender.kind === 'peer') {
+      return this.#sendPeer(sender, input.to, text, registry, input.messageId);
+    }
+    return this.#sendFromAuthority(senderName, sender, input.to, text, registry, authenticated);
+  }
+
+  /** Human | Boss send: existing fan-out, plus the role policy when the sender
+   *  authenticated (every resolved recipient role must be permitted). */
+  async #sendFromAuthority(
+    senderName: string,
+    sender: PromptSender,
+    to: SendInput['to'],
+    text: string,
+    registry: RegistrySnapshot,
+    authenticated: boolean,
+  ): Promise<SendResult> {
+    const senderRole = authenticated ? senderName : null;
+    const { entries: targets, human } = await this.#resolveRecipients(
+      to,
+      senderRole,
+      registry,
+      authenticated,
+    );
+    if (targets.length === 0 && human) {
+      // `to: 'human'` from an authority sender has no session and no agent:
+      // report the legacy no-target status instead of a silent empty success.
       throw new AppError(404, 'no_targets', `no matching agents for: ${JSON.stringify(to)}`);
     }
-    const prefix = sender === 'human' ? 'Human' : 'Boss';
+    const promptText = composePrompt(sender, text);
+    // Attribution is NOT recorded here: it is set when this prompt is observed
+    // arriving on the target session's inbox, so a queued prompt cannot be
+    // overwritten by a later send before it is answered.
     const results = await Promise.allSettled(
-      targets.map((a) => {
-        this.#lastPromptFrom.set(a.name, sender);
-        return this.#ports.prompts.prompt(a.session, `${prefix}: ${text}`);
-      }),
+      targets.map((a) => this.#ports.prompts.prompt(a.session, promptText)),
     );
     const sent: string[] = [];
     const skipped: string[] = [];
@@ -385,13 +508,290 @@ export class ChatService {
     if (sent.length > 0) {
       await this.#save({
         ts: new Date().toISOString(),
-        from: sender,
+        from: senderName,
         to: sent.join(', '),
         body: text,
         sessionId: null,
       });
     }
     return { sent, skipped };
+  }
+
+  /** Resolve a `to` value into recipients, applying the ROLE policy.
+   *
+   *  Precedence per token: `human`, `boss`, then a ROLE name (all its holders),
+   *  then an agent name. Policy is enforced only when `enforcePolicy` is set
+   *  (authenticated callers); the legacy unauthenticated path keeps its old
+   *  name/`all` behaviour. A role-less agent is unaddressable. */
+  async #resolveRecipients(
+    to: SendInput['to'],
+    senderRole: string | null,
+    registry: RegistrySnapshot,
+    enforcePolicy: boolean,
+  ): Promise<{ entries: RegistryEntry[]; human: boolean }> {
+    const allowlist = enforcePolicy ? await this.#allowlist() : {};
+    const permit = (recipientRole: string | null, label: string): void => {
+      if (!enforcePolicy) return;
+      if (senderRole === null) {
+        // Fail CLOSED: a policy check with no sender role is a bug, never a pass.
+        throw new AppError(403, 'no_role', 'sender has no role and cannot be checked against the policy');
+      }
+      if (recipientRole === null) {
+        throw new AppError(403, 'no_role', `${label} has no role and cannot be addressed`);
+      }
+      if (!isPairAllowed(allowlist, senderRole, recipientRole)) {
+        throw new AppError(403, 'forbidden_pair', `${senderRole} may not send to ${recipientRole} (${label})`);
+      }
+    };
+    const push = (entries: RegistryEntry[], agent: RegistryEntry): void => {
+      // Identity is the SESSION: duplicate agent names are valid registry
+      // content and must each be prompted; the same session twice is not.
+      if (!entries.some((e) => e.session === agent.session)) entries.push(agent);
+    };
+    /** Explicit lists follow REGISTRY order, like the legacy fan-out. */
+    const ordered = (entries: RegistryEntry[]): RegistryEntry[] =>
+      [...entries].sort((a, b) => registry.agents.indexOf(a) - registry.agents.indexOf(b));
+
+    if (to === 'all') {
+      const entries: RegistryEntry[] = [];
+      for (const agent of registry.agents) {
+        if (enforcePolicy) {
+          if (agent.role === undefined || senderRole === null) continue;
+          if (!isPairAllowed(allowlist, senderRole, agent.role)) continue;
+        }
+        push(entries, agent);
+      }
+      if (entries.length === 0) {
+        throw new AppError(404, 'no_targets', `no matching agents for: ${JSON.stringify(to)}`);
+      }
+      return { entries, human: false };
+    }
+
+    const tokens = Array.isArray(to) ? to : [to];
+    if (tokens.length === 0) {
+      // Legacy pin: an EMPTY array is the bridge's no-targets 404, message
+      // text included (bridge.mjs:405-412).
+      throw new AppError(404, 'no_targets', `no matching agents for: ${JSON.stringify(to)}`);
+    }
+    const entries: RegistryEntry[] = [];
+    let human = false;
+    for (const token of tokens) {
+      if (token === 'human') {
+        permit('human', 'human');
+        human = true;
+        continue;
+      }
+      if (token === BOSS) {
+        if (registry.boss === null) {
+          throw new AppError(404, 'no_targets', `no matching agents for: ${JSON.stringify(token)}`);
+        }
+        permit('boss', 'boss');
+        push(entries, registry.boss);
+        continue;
+      }
+      const holders = agentsWithRole(registry, token);
+      if (holders.length > 0) {
+        permit(token, `role ${token}`);
+        for (const holder of holders) push(entries, holder);
+        continue;
+      }
+      // Agent NAME: every entry with that name (duplicate names are valid
+      // registry content and each session must be prompted).
+      const named = registry.agents.filter((a) => a.name === token);
+      if (named.length === 0) {
+        throw new AppError(404, 'no_targets', `no matching agents for: ${JSON.stringify(token)}`);
+      }
+      for (const agent of named) {
+        permit(agent.role ?? null, agent.name);
+        push(entries, agent);
+      }
+    }
+    return { entries: ordered(entries), human };
+  }
+
+  /** Peer send: archive first (exact body + idempotency key + armed
+   *  suppressor), then prompt. Recipients are resolved by ROLE: a role token
+   *  fans out to every holder; `human` is archive-only (no session). */
+  async #sendPeer(
+    sender: { readonly kind: 'peer'; readonly name: string },
+    to: SendInput['to'],
+    text: string,
+    registry: RegistrySnapshot,
+    messageId: string | undefined,
+  ): Promise<SendResult> {
+    if (RESERVED_PREFIX.test(text)) {
+      throw new AppError(400, 'reserved_prefix', 'a peer message may not begin with "Human:" or "Boss:"');
+    }
+    if (to === 'all' || Array.isArray(to)) {
+      throw new AppError(403, 'forbidden_pair', 'a peer sends to one recipient or role (no "all", no list)');
+    }
+    if (messageId === undefined || !PEER_MESSAGE_ID.test(messageId)) {
+      throw new AppError(400, 'invalid_message_id', 'messageId is required for peer sends (format msg_<id>)');
+    }
+    const senderEntries = registry.agents.filter((a) => a.name === sender.name);
+    const senderEntry = senderEntries[0];
+    if (senderEntry === undefined) {
+      throw new AppError(403, 'unknown_sender', `sender is not a registered agent: ${sender.name}`);
+    }
+    // A duplicated name cannot be told apart: two sessions, one identity. The
+    // registry still LISTS duplicates (bridge compatibility), but a peer send
+    // from an ambiguous name would arm the wrong turn, so refuse it.
+    if (senderEntries.length > 1) {
+      throw new AppError(409, 'ambiguous_sender', `agent name is not unique in the registry: ${sender.name}`);
+    }
+    // Defence in depth: the principal file is validated at load, but the
+    // invariant "a peer name cannot forge a prefix line" is enforced where the
+    // prefix is composed, not only where the file is read.
+    if (!isComposablePeerName(sender.name)) {
+      throw new AppError(403, 'invalid_sender', `sender name cannot be composed into a peer prefix: ${JSON.stringify(sender.name)}`);
+    }
+    const senderRole = roleOfPrincipal(sender.name, registry);
+    if (senderRole === null) {
+      throw new AppError(403, 'no_role', `sender has no role and cannot send: ${sender.name}`);
+    }
+    // Idempotency: a retried send returns the archived row's recipients and
+    // prompts nothing again. The lookup is SENDER-SCOPED - keys are client
+    // chosen, so one agent must not claim another's.
+    const existing = this.#store.findOwnMessage(messageId, sender.name);
+    if (existing !== null) {
+      const targets = existing.message.to === null ? [] : existing.message.to.split(', ');
+      // `sent` means DELIVERED: a row still pending is honestly skipped (the
+      // startup reconciliation owns the one retry).
+      return existing.deliveryState === 1
+        ? { sent: targets, skipped: [], messageId }
+        : { sent: [], skipped: targets, messageId };
+    }
+    const { entries, human } = await this.#resolveRecipients(to, senderRole, registry, true);
+    const labels = [...(human ? ['human'] : []), ...entries.map((e) => e.name)];
+    const delivered = entries.length > 0;
+    // The arm belongs to the SENDER's turn, not to the recipient: a peer send
+    // to `human` also ends a turn whose transcript must not be archived twice.
+    let row: { id: number };
+    try {
+      row = await this.#save({
+        ts: new Date().toISOString(),
+        from: sender.name,
+        to: labels.join(', '),
+        body: text,
+        sessionId: senderEntry.session,
+        messageId,
+        captureSuppressed: true,
+        deliveryState: delivered ? 0 : 1,
+      });
+    } catch (err) {
+      // A concurrent instance may have won the unique-index race with the
+      // same key: that is the idempotent hit, not a failure.
+      if (!this.#store.isMessageIdConflict(err)) throw err;
+      const raced = this.#store.findOwnMessage(messageId, sender.name);
+      if (raced === null) throw err;
+      const targets = raced.message.to === null ? [] : raced.message.to.split(', ');
+      return raced.deliveryState === 1
+        ? { sent: targets, skipped: [], messageId }
+        : { sent: [], skipped: targets, messageId };
+    }
+    if (!delivered) return { sent: ['human'], skipped: [], messageId };
+    const promptText = composePrompt(sender, text);
+    const results = await Promise.allSettled(
+      entries.map((entry) => this.#ports.prompts.prompt(entry.session, promptText)),
+    );
+    const sent: string[] = [];
+    const skipped: string[] = [];
+    results.forEach((r, i) => {
+      const name = entries[i]?.name;
+      if (name === undefined) return;
+      (r.status === 'fulfilled' ? sent : skipped).push(name);
+    });
+    if (skipped.length > 0) {
+      // Archived but not fully delivered: the row keeps delivery_state 0, so
+      // the startup reconciliation retries it once. Log the cause - an operator
+      // otherwise sees only "skipped".
+      console.warn(`[chat] peer delivery skipped (${sender.name} -> ${skipped.join(', ')})`);
+    } else {
+      await this.#serialized(() => this.#store.markDeliverySent(row.id));
+    }
+    return { sent, skipped, messageId };
+  }
+
+  async #allowlist(): Promise<PeerAllowlist> {
+    return this.#readAllowlist === undefined ? {} : this.#readAllowlist();
+  }
+
+  /** Runs a store call behind the ingest chain: the ingest retry loop
+   *  temporarily LOWERS the shared connection's busy_timeout, so a call that
+   *  jumps the queue can fail as busy. Ordering alone fixes it - the lowered
+   *  value is restored when the running attempt finishes. */
+  #serialized<T>(fn: () => T): Promise<T> {
+    const run = this.#ingestChain.then(() => fn());
+    this.#ingestChain = run.catch(() => {});
+    return run;
+  }
+
+  /** Ends the arming on a session (turn boundary reached). A failed clear is
+   *  logged, remembered for this process, and retried on the next capture -
+   *  the arm must fail OPEN: a stale arm would suppress a real reply. */
+  #clearArmed(sessionId: string): void {
+    try {
+      this.#store.clearCaptureSuppressed(sessionId);
+      this.#unclearedArms.delete(sessionId);
+    } catch (err) {
+      this.#unclearedArms.add(sessionId);
+      console.warn('[chat] capture-suppression clear failed (failing open; retried on next capture):', err);
+    }
+  }
+
+  /** One startup pass over peer rows archived but never confirmed delivered.
+   *  Converts a silent loss (crash between archive and prompt) into
+   *  at-least-once delivery: at most ONE duplicate prompt per row, ever. Rows
+   *  whose recipient no longer resolves are marked retried, not retried
+   *  forever. Never throws: startup must not die for a retry. */
+  async reconcileDeliveries(): Promise<void> {
+    // No turn can be in flight across a restart, so every surviving arm is
+    // stale: clear them all before anything else. This removes the only path
+    // where a crash could let an arm suppress a real reply.
+    try {
+      this.#store.clearAllCaptureSuppressed();
+    } catch (err) {
+      console.warn('[chat] clearing stale capture arms failed:', err);
+    }
+    const pending = this.#store.unconfirmedPeerDeliveries();
+    if (pending.length === 0) return;
+    if (!this.#ports.prompts.isAvailable()) {
+      console.warn(`[chat] delivery reconciliation skipped (${pending.length} pending): OpenCode server URL not discovered`);
+      return;
+    }
+    const registry = await this.#registry.read();
+    let sent = 0;
+    let failed = 0;
+    for (const row of pending) {
+      // A fan-out row names several recipients; `human` has no session. The
+      // row is confirmed only when every reachable recipient accepts.
+      const names = (row.to ?? '').split(', ').filter((n) => n !== '' && n !== 'human');
+      const sessions: string[] = [];
+      for (const name of names) {
+        const entry = name === BOSS ? (registry.boss ?? undefined) : undefined;
+        if (entry !== undefined) {
+          sessions.push(entry.session);
+          continue;
+        }
+        // Duplicate names are possible; re-prompt every session with it.
+        for (const held of registry.agents.filter((a) => a.name === name)) sessions.push(held.session);
+      }
+      if (sessions.length === 0) {
+        this.#store.markDeliveryRetried(row.id);
+        failed += 1;
+        continue;
+      }
+      try {
+        await Promise.all(sessions.map((session) => this.#ports.prompts.prompt(session, composePrompt(senderOf(row.from), row.text))));
+        await this.#serialized(() => this.#store.markDeliverySent(row.id));
+        sent += 1;
+      } catch (err) {
+        console.warn(`[chat] reconciliation delivery failed (${row.from} -> ${row.to}):`, err);
+        this.#store.markDeliveryRetried(row.id);
+        failed += 1;
+      }
+    }
+    console.log(`[chat] delivery reconciliation: ${sent} sent, ${failed} given up (one attempt each)`);
   }
 
   // --- /webhook legacy capture (bridge.mjs:342-363) ---------------------------

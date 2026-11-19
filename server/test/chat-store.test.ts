@@ -141,4 +141,65 @@ describe('chat message repository (new implementation only)', () => {
       close();
     }
   });
+
+  it('peer messaging columns: idempotency key, capture suppression, delivery state', () => {
+    const { repo, close } = openRepo('peer-columns.db');
+    try {
+      const first = repo.insert({
+        ts: '2026-11-19T10:00:00.000Z',
+        from: 'ruben',
+        to: 'greg',
+        body: 'hello',
+        sessionId: 'ses_ruben',
+        messageId: 'msg_a',
+        captureSuppressed: true,
+        deliveryState: 0,
+      });
+      expect(first.inserted).toBe(true);
+      expect(repo.findOwnMessage('msg_a', 'ruben')?.message.id).toBe(first.row.id);
+      expect(repo.findOwnMessage('msg_a', 'ruben')?.deliveryState).toBe(0);
+      expect(repo.findOwnMessage('msg_a', 'somebody-else')).toBeNull(); // sender-scoped
+
+      // The unique index is the idempotency guarantee: a second row with the
+      // same key cannot exist.
+      expect(() =>
+        repo.insert({
+          ts: '2026-11-19T10:00:01.000Z',
+          from: 'ruben',
+          to: 'greg',
+          body: 'hello again',
+          sessionId: 'ses_ruben',
+          messageId: 'msg_a',
+        }),
+      ).toThrow();
+
+      // Capture suppression is keyed by the SENDER session.
+      expect(repo.isCaptureSuppressed('ses_ruben')).toBe(true);
+      expect(repo.isCaptureSuppressed('ses_greg')).toBe(false);
+      repo.clearCaptureSuppressed('ses_ruben');
+      expect(repo.isCaptureSuppressed('ses_ruben')).toBe(false);
+
+      // Delivery state: peer rows start pending, legacy rows count as sent.
+      const legacy = repo.insert({ ts: '2026-11-19T10:02:00.000Z', from: 'boss', to: 'ruben', body: 'x', sessionId: null });
+      expect(repo.unconfirmedPeerDeliveries().map((r) => r.id)).toEqual([first.row.id]);
+      repo.markDeliverySent(first.row.id);
+      expect(repo.unconfirmedPeerDeliveries()).toEqual([]);
+      expect(legacy.inserted).toBe(true);
+      expect(repo.unconfirmedPeerDeliveries()).toEqual([]);
+
+      const second = repo.insert({
+        ts: '2026-11-19T10:03:00.000Z',
+        from: 'ruben',
+        to: 'human',
+        body: 'status',
+        sessionId: 'ses_ruben',
+        messageId: 'msg_b',
+      });
+      repo.markDeliveryRetried(second.row.id);
+      expect(repo.unconfirmedPeerDeliveries()).toEqual([]);
+      expect(legacy.inserted).toBe(true);
+    } finally {
+      close();
+    }
+  });
 });

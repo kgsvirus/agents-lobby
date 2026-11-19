@@ -10,6 +10,8 @@ import type { ChatService } from '../application/chat-service.js';
 import { parseMessageQuery } from '../domain/query.js';
 import { AppError } from '../../../shared/errors/index.js';
 import { bearerCheck } from '../../../api/middleware/auth.js';
+import { requirePrincipal } from '../../../api/middleware/peer-auth.js';
+import type { Principal } from '../../../infrastructure/config/index.js';
 
 // `from` is validated in the SERVICE (business rule, bridge.mjs:397-398) so
 // the error envelope carries the bridge's exact message and code. An EMPTY
@@ -19,6 +21,8 @@ const sendBodySchema = z.object({
   to: z.union([z.string().min(1), z.array(z.string().min(1))]),
   message: z.string(),
   from: z.string().optional(), // default 'boss' — bridge.mjs:394
+  // Peer sends: client idempotency key (see ChatService).
+  messageId: z.string().min(1).optional(),
 });
 
 const promptBodySchema = z.object({
@@ -51,12 +55,25 @@ export interface ChatRoutesOptions {
   readonly service: ChatService;
   /** Undefined = open local access (decision 4). Applies to /send + /prompt. */
   readonly authToken?: string;
+  /** Token -> principal map (peer messaging). Undefined = the feature is off:
+   *  no identity endpoint, and /send keeps the legacy body-`from` mode. */
+  readonly principals?: ReadonlyMap<string, Principal>;
 }
 
 export function chatRoutes(app: FastifyInstance, opts: ChatRoutesOptions): void {
   const service = opts.service;
+  const principals = opts.principals;
   // Route-level preHandler so the token gates ONLY /send + /prompt.
-  const sendAuth = opts.authToken === undefined ? undefined : bearerCheck(opts.authToken);
+  // Identity mode (peer-auth file present) replaces the legacy shared token:
+  // the principal, not the body, decides who is sending.
+  const peerGuard = principals === undefined ? undefined : requirePrincipal(principals);
+  const sendAuth = principals !== undefined ? peerGuard : opts.authToken === undefined ? undefined : bearerCheck(opts.authToken);
+
+  // Identity check for the dashboard's Connect button: verifies a pasted token
+  // without sending a message. Registered only when identities exist.
+  if (principals !== undefined) {
+    app.get('/api/principal', { preHandler: peerGuard }, async (request) => request.principal);
+  }
 
   app.get('/api/messages', async (request) => {
     const raw = messagesQuerySchema.parse(request.query);
@@ -69,11 +86,31 @@ export function chatRoutes(app: FastifyInstance, opts: ChatRoutesOptions): void 
 
   app.post('/send', { preHandler: sendAuth }, async (request) => {
     const body = sendBodySchema.parse(request.body);
-    return service.sendMessage({ to: body.to, message: body.message, from: body.from });
+    const principal = request.principal;
+    if (principal === undefined) {
+      // Legacy open mode: the body carries the sender (human | boss only).
+      return service.sendMessage({ to: body.to, message: body.message, from: body.from });
+    }
+    // A body `from` is a CLAIM; the credential is the identity. A mismatch is
+    // impersonation, so it is loud rather than silently overwritten.
+    if (body.from !== undefined && body.from !== principal.name) {
+      throw new AppError(403, 'identity_mismatch', `from does not match the authenticated principal (${principal.name})`);
+    }
+    return service.sendMessage({
+      to: body.to,
+      message: body.message,
+      from: principal.name,
+      authenticated: true,
+      ...(body.messageId === undefined ? {} : { messageId: body.messageId }),
+    });
   });
 
   app.post('/prompt', { preHandler: sendAuth }, async (request) => {
     const body = promptBodySchema.parse(request.body);
+    // Webchat is the human's channel: an agent principal may not drive it.
+    if (request.principal !== undefined && request.principal.kind !== 'human') {
+      throw new AppError(403, 'forbidden_principal', 'the webchat prompt is reserved for the human principal');
+    }
     return service.promptBoss(body.message);
   });
 

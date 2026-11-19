@@ -4,6 +4,7 @@
 // register additional routes before ready() and inject fake ports.
 import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { AppConfig } from './infrastructure/config/index.js';
 import { migrationsFolder, openDatabase, runMigrations } from './infrastructure/database/client.js';
@@ -22,6 +23,7 @@ import { createOpenCodeIntegration, type OpenCodeIntegration } from './integrati
 // contract). Both are pure; no transport crosses here.
 import { createSessionResolver } from './integrations/opencode/index.js';
 import { ChatMessageRepository } from './modules/chat/infrastructure/message-repository.js';
+import { readPeerAllowlist } from './modules/chat/infrastructure/peer-allowlist.js';
 import { ChatService } from './modules/chat/application/chat-service.js';
 import { chatRoutes } from './modules/chat/presentation/routes.js';
 import { AgentMirrorRepository } from './modules/agents/infrastructure/agent-mirror-repository.js';
@@ -52,6 +54,9 @@ export interface BuildAppOptions {
   /** Test-only SSE heartbeat override (EventsRouteOptions.heartbeatMs).
    *  Undefined = the production 25 s interval. */
   readonly eventsHeartbeatMs?: number;
+  /** Pino redaction paths (default none). server.ts passes
+   *  `req.headers.authorization` so bearer tokens never reach the log. */
+  readonly loggerRedact?: string[];
 }
 
 export function buildApp(config: AppConfig, options: BuildAppOptions = {}): FastifyInstance {
@@ -106,10 +111,23 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
       fallbackServerUrl: config.opencodeServerUrl ?? registryFallback,
       timeoutMs: config.opencodeTimeoutMs,
     });
-  const chat = new ChatService({ store, registry, ports: { prompts: opencode.prompts, sessions: opencode.sessions, bus } });
+  const chat = new ChatService({
+    store,
+    registry,
+    ports: { prompts: opencode.prompts, sessions: opencode.sessions, bus },
+    readAllowlist: () => readPeerAllowlist(config.peerAllowlistPath),
+  });
+  // Fail-closed is correct but silent: an operator who created principals
+  // expects the policy file to exist, and a missing one denies every send.
+  if (config.peerAuth !== undefined && !existsSync(config.peerAllowlistPath)) {
+    console.warn(
+      `[chat] peer policy file not found at ${config.peerAllowlistPath} (relative to the run directory): every authenticated send will be refused`,
+    );
+  }
 
   const app = Fastify({
     logger: options.logger ?? false,
+    ...(options.loggerRedact ? { redact: options.loggerRedact } : {}),
     bodyLimit: config.bodyLimit,
     // SSE connections are hijacked and never "finish"; without this the
     // process hangs in app.close() waiting on them.
@@ -121,7 +139,7 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
   app.decorate('chat', chat);
   app.decorate('agents', agentsService);
   app.register(healthRoutes);
-  app.register(chatRoutes, { service: chat, authToken: config.authToken });
+  app.register(chatRoutes, { service: chat, authToken: config.authToken, principals: config.peerAuth });
   app.register(agentsRoutes, { service: agentsService });
   // Decision-2 compatibility: machine-local projects listing consumed by the
   // dashboard's Projects module (Task-1 ledger ruling).
@@ -164,6 +182,13 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
     unsubscribeEvents();
     bus.close();
     sqlite.close();
+  });
+
+  // Peer delivery reconciliation: one attempt per row that was archived but
+  // never confirmed. Fire-and-forget - startup must not wait on OpenCode, and
+  // a failure is logged, never thrown.
+  void chat.reconcileDeliveries().catch((err: unknown) => {
+    console.error('[chat] delivery reconciliation failed:', err);
   });
 
   return app;

@@ -15,10 +15,12 @@ export function makeConfig(
   dir: string,
   env: Record<string, string> = {},
   authFile = join(dir, 'absent-auth.json'),
+  peerAuthFile = join(dir, 'absent-peer-auth.json'),
 ): AppConfig {
   return loadConfig({
     env: { ...env, LOBBY_DB_PATH: testDbPath(dir) },
     authFile,
+    peerAuthFile,
   });
 }
 

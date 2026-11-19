@@ -27,19 +27,35 @@ export interface MessagePage {
   readonly hasMore: boolean;
 }
 
-/** A new capture-point message before it has an id (store.mjs:41). */
+/** A new capture-point message before it has an id (store.mjs:41). The optional
+ *  peer-messaging fields are omitted by capture paths: `messageId` is the
+ *  client-supplied idempotency key of an explicit send, `captureSuppressed`
+ *  arms the sender-turn suppressor, and `deliveryState` 0 marks a row whose
+ *  prompt is not yet confirmed (1 = delivered/legacy, 2 = retried once). */
 export interface NewMessage {
   readonly ts: string;
   readonly from: string;
   readonly to: string | null;
   readonly body: string;
   readonly sessionId: string | null;
+  readonly messageId?: string | null;
+  readonly captureSuppressed?: boolean;
+  readonly deliveryState?: number;
 }
 
-/** The store's unread-slice filter (bridge.mjs:111-113): the boss already has
- *  its own replies (`from === 'boss'`) and the human's in-session prompts
- *  (`human → boss`) natively in its session — only everything else belongs in
- *  the wake slice. Pure, unit-tested. */
+/** The store's unread-slice filter. The boss wakes only for traffic addressed
+ *  TO it:
+ *  - its own replies never ride (`from === 'boss'`);
+ *  - no human row rides (native when addressed to the boss, private when
+ *    addressed to an agent), except a legacy null-receiver capture;
+ *  - an agent row rides only when it names `boss` (or is a legacy null-receiver
+ *    capture) - an agent's reply to the human is that agent's business.
+ *  Pure, unit-tested. */
 export function wakeSliceRows(rows: readonly WireMessageRow[]): WireMessageRow[] {
-  return rows.filter((r) => r.from !== 'boss' && !(r.from === 'human' && r.to === 'boss'));
+  return rows.filter((r) => {
+    if (r.from === 'boss') return false;
+    if (r.from === 'human') return r.to === null;
+    if (r.to === null) return true; // legacy capture with no receiver
+    return r.to.split(',').map((t) => t.trim()).includes('boss');
+  });
 }

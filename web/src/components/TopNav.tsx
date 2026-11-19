@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  ApiError,
+  fetchPrincipal,
+  getHumanToken,
+  setHumanToken,
+} from '../lib/api';
 import type { Theme } from '../lib/theme';
 import { Button } from './ui/button';
 
@@ -23,6 +29,40 @@ export function TopNav({
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [identity, setIdentity] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState('');
+
+  // A stored token is only known to be valid once the server confirms it.
+  useEffect(() => {
+    if (getHumanToken() === null) return;
+    fetchPrincipal()
+      .then((p) => setIdentity(`${p.name} (${p.kind})`))
+      .catch(() => setIdentity(null));
+  }, []);
+
+  const connect = async () => {
+    const token = tokenDraft.trim();
+    if (token === '') return;
+    setHumanToken(token);
+    try {
+      const p = await fetchPrincipal();
+      setIdentity(`${p.name} (${p.kind})`);
+      setConnectError('');
+      setTokenDraft('');
+    } catch (err) {
+      setHumanToken(null);
+      setIdentity(null);
+      setConnectError(err instanceof ApiError ? err.message : 'Connect failed');
+    }
+  };
+
+  const disconnect = () => {
+    setHumanToken(null);
+    setIdentity(null);
+    setConnectError('');
+    setTokenDraft('');
+  };
 
   // Close on outside click (the icon re-click closes via its own handler).
   useEffect(() => {
@@ -99,6 +139,55 @@ export function TopNav({
                 />
               </Button>
               <span className="text-xs text-gray-900 dark:text-gray-200">Dark / Light</span>
+            </div>
+            <div className="mt-1 border-t border-gray-200 px-1 pt-2 dark:border-gray-600">
+              <label
+                htmlFor="human-token"
+                className="block text-xs text-gray-900 dark:text-gray-200"
+              >
+                Human token
+              </label>
+              {identity === null ? (
+                <>
+                  <input
+                    id="human-token"
+                    type="password"
+                    value={tokenDraft}
+                    onChange={(e) => setTokenDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void connect();
+                    }}
+                    placeholder="paste token"
+                    autoComplete="off"
+                    className="mt-1 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-[#1b1b1b] dark:text-gray-100"
+                  />
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => void connect()}
+                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
+                  >
+                    Connect
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
+                    Connected as {identity}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={disconnect}
+                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
+                  >
+                    Disconnect
+                  </Button>
+                </>
+              )}
+              {connectError !== '' && (
+                <p className="mt-1 text-xs text-red-700 dark:text-red-500">{connectError}</p>
+              )}
             </div>
           </div>
         )}

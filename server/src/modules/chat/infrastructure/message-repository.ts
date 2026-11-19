@@ -61,7 +61,7 @@ export class ChatMessageRepository implements ChatMessageStore {
   constructor(db: Database.Database) {
     this.#db = db;
     this.#insertStmt = db.prepare(
-      'INSERT INTO messages (ts, sender, receiver, body, session_id) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO messages (ts, sender, receiver, body, session_id, message_id, capture_suppressed, delivery_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     );
     // Duplicate-capture lookup (work order Task 1.2; review fixes 3-4). The
     // db-level check is the choke point every event-capture insert goes
@@ -117,8 +117,71 @@ export class ChatMessageRepository implements ChatMessageStore {
         return { row: toWire(dup), inserted: false };
       }
     }
-    const r = this.#insertStmt.run(row.ts, row.from, row.to, row.body, row.sessionId);
+    const r = this.#insertStmt.run(
+      row.ts,
+      row.from,
+      row.to,
+      row.body,
+      row.sessionId,
+      row.messageId ?? null,
+      row.captureSuppressed === true ? 1 : 0,
+      row.deliveryState ?? 1,
+    );
     return { row: toWire(this.#rowByIdStmt.get(Number(r.lastInsertRowid))), inserted: true };
+  }
+
+  findOwnMessage(
+    messageId: string,
+    sender: string,
+  ): { message: WireMessageRow; deliveryState: number } | null {
+    const raw = this.#db
+      .prepare(`SELECT ${ROW_COLS}, delivery_state FROM messages WHERE message_id = ? AND sender = ? LIMIT 1`)
+      .get(messageId, sender) as (RawWireRow & { delivery_state: number }) | undefined;
+    return raw === undefined ? null : { message: toWire(raw), deliveryState: raw.delivery_state };
+  }
+
+  /** The unique index is the cross-instance idempotency guarantee; losing the
+   *  race is a duplicate, not a failure. */
+  isMessageIdConflict(err: unknown): boolean {
+    const code = (err as { code?: string } | null)?.code;
+    return code === 'SQLITE_CONSTRAINT_UNIQUE' || code === 'SQLITE_CONSTRAINT_PRIMARYKEY';
+  }
+
+  isCaptureSuppressed(sessionId: string): boolean {
+    return (
+      this.#db
+        .prepare('SELECT 1 FROM messages WHERE session_id = ? AND capture_suppressed = 1 LIMIT 1')
+        .get(sessionId) !== undefined
+    );
+  }
+
+  clearCaptureSuppressed(sessionId: string): void {
+    this.#db
+      .prepare('UPDATE messages SET capture_suppressed = 0 WHERE session_id = ? AND capture_suppressed = 1')
+      .run(sessionId);
+  }
+
+  clearAllCaptureSuppressed(): void {
+    this.#db.prepare('UPDATE messages SET capture_suppressed = 0 WHERE capture_suppressed = 1').run();
+  }
+
+  markDeliverySent(id: number): void {
+    this.#db.prepare('UPDATE messages SET delivery_state = 1 WHERE id = ?').run(id);
+  }
+
+  markDeliveryRetried(id: number): void {
+    this.#db.prepare('UPDATE messages SET delivery_state = 2 WHERE id = ?').run(id);
+  }
+
+  unconfirmedPeerDeliveries(): WireMessageRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${ROW_COLS} FROM messages
+         WHERE delivery_state = 0 AND sender NOT IN ('human', 'boss')
+         ORDER BY id ASC`,
+      )
+      .all() as RawWireRow[];
+    return rows.map(toWire);
   }
 
   query(params: {

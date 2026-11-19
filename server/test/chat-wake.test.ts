@@ -28,15 +28,20 @@ function seedWakeFixture(fixture: ReturnType<typeof makeChatFixture>): void {
 }
 
 describe('wake slice — bridge.mjs:98-130 semantics (retired source; new stack only)', () => {
-  it('the slice filter excludes exactly the boss-native rows: boss replies, human → boss, exact-match only', () => {
-    // bridge.mjs:113 semantics (transcribed): from !== 'boss' && !(from === 'human' && to === 'boss')
+  it('the slice filter keeps only rows addressed to the boss (plus legacy null receivers)', () => {
+    // Rule (2026-11-19): boss replies never ride; NO human row rides; an agent
+    // row rides only when it names boss, or is a legacy null-receiver capture.
     const rows = [
       { id: 1, time: 't1', from: 'boss', to: 'human', text: 'own' },
       { id: 2, time: 't2', from: 'human', to: 'boss', text: 'native' },
-      { id: 3, time: 't3', from: 'human', to: 'boss ', text: 'kept (exact match only)' },
-      { id: 4, time: 't4', from: 'taskflow', to: null, text: 'kept' },
+      { id: 3, time: 't3', from: 'human', to: 'boss ', text: 'still human' },
+      { id: 4, time: 't4', from: 'human', to: 'ruben', text: 'private' },
+      { id: 5, time: 't5', from: 'human', to: null, text: 'legacy webhook' },
+      { id: 6, time: 't6', from: 'taskflow', to: null, text: 'kept' },
+      { id: 7, time: 't7', from: 'taskflow', to: 'human', text: 'agent status' },
+      { id: 8, time: 't8', from: 'taskflow', to: 'boss', text: 'addressed to boss' },
     ] as const;
-    expect(wakeSliceRows([...rows]).map((r) => r.id)).toEqual([3, 4]);
+    expect(wakeSliceRows([...rows]).map((r) => r.id)).toEqual([5, 6, 8]);
   });
 
   it('wakes with a BYTE-IDENTICAL slice text for the fixture rows', async () => {
@@ -48,24 +53,34 @@ describe('wake slice — bridge.mjs:98-130 semantics (retired source; new stack 
     // Built with the bridge's exact template (bridge.mjs:114-118):
     // WAKE_PROMPT + "\n\n" + rows.map(r => `[${r.time}] [from: ${r.from}] [to: ${r.to}] ${r.text}`).join("\n")
     const sliced = [
-      '[2026-11-17T09:01:00.000Z] [from: taskflow] [to: human] agent status: phase done',
       '[2026-11-17T09:02:00.000Z] [from: immigapp] [to: all, boss] broadcast from immigapp',
       '[2026-11-17T09:03:00.000Z] [from: porty] [to: null] webhook capture',
     ].join('\n');
     expect(text).toBe(WAKE_PROMPT + '\n\n' + sliced);
   });
 
-  it('empty slice → the bare wake prompt and NO bookmark move (bridge.mjs:118,121-124)', async () => {
+  it('a wake with nothing unread prompts nobody (no empty-slice noise)', async () => {
+    const f = makeChatFixture(fakeRegistry(exampleRegistry()));
+    f.store.insert({ ts: '2026-11-17T09:00:00.000Z', from: 'taskflow', to: 'boss', body: 'ping', sessionId: null });
+    await f.service.wakeBoss(); // delivers + advances the bookmark
+    expect(f.opencode.promptCalls).toHaveLength(1);
+    await f.service.wakeBoss(); // nothing new
+    expect(f.opencode.promptCalls).toHaveLength(1);
+  });
+
+  it('empty slice → the bare wake prompt, and the bookmark advances past the filtered rows', async () => {
     const f = makeChatFixture(fakeRegistry(exampleRegistry()));
     // Only boss-native rows exist → slice empty.
     f.store.insert({ ts: '2026-11-17T09:00:00.000Z', from: 'human', to: 'boss', body: 'native', sessionId: null });
     f.store.insert({ ts: '2026-11-17T09:00:01.000Z', from: 'boss', to: 'human', body: 'own', sessionId: null });
     await f.service.wakeBoss();
     expect(f.opencode.promptCalls).toEqual([{ sessionId: 'ses_boss', text: WAKE_PROMPT }]);
-    // No bookmark move: everything (rows 1, 2) still counts as unread.
-    expect(f.store.unread('boss').map((r) => r.id)).toEqual([1, 2]);
+    // Bookmark rule (peer-messaging fix): advance through the whole unread
+    // SNAPSHOT, not just the slice — rows kept out of the slice (boss-native,
+    // peer-to-peer) would otherwise be re-read and re-filtered on every wake.
+    expect(f.store.unread('boss')).toEqual([]);
     f.store.insert({ ts: '2026-11-17T09:00:02.000Z', from: 'human', to: 'boss', body: 'x', sessionId: null });
-    expect(f.store.unread('boss')).toHaveLength(3);
+    expect(f.store.unread('boss')).toHaveLength(1);
   });
 
   it('skips the wake entirely when a user input is already pending (coalescing, bridge.mjs:102-106)', async () => {
@@ -78,11 +93,9 @@ describe('wake slice — bridge.mjs:98-130 semantics (retired source; new stack 
     expect(f.store.unread('boss')).toHaveLength(5);
   });
 
-  it('the bookmark advances only THROUGH the slice: rows inserted during the enqueue stay unread', async () => {
+  it('the bookmark advances through the unread SNAPSHOT: rows inserted during the enqueue stay unread', async () => {
     const f = makeChatFixture(fakeRegistry(exampleRegistry()));
     seedWakeFixture(f);
-    // Simulate a row landing between the unread snapshot and the bookmark
-    // write (the await gap the bridge comments on, bridge.mjs:120-123).
     // Simulate a row landing between the unread snapshot and the bookmark
     // write (the await gap the bridge comments on, bridge.mjs:120-123).
     const store = f.store;
@@ -94,8 +107,9 @@ describe('wake slice — bridge.mjs:98-130 semantics (retired source; new stack 
     };
     await f.service.wakeBoss();
     expect(f.opencode.promptCalls).toHaveLength(1);
-    // Bookmark is through the slice's last row (id 5) — the mid-flight row 6
-    // stays unread and surfaces in the NEXT wake (bridge.mjs:120-124).
+    // The bookmark is through the snapshot's last row (id 5); the mid-flight
+    // row 6 landed after the snapshot and stays unread for the NEXT wake
+    // (bridge.mjs:120-124).
     expect(f.store.unread('boss').map((r) => r.id)).toEqual([6]);
   });
 

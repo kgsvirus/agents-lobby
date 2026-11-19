@@ -20,12 +20,37 @@ import type { ChatRegistry, RegistrySnapshot } from '../../modules/chat/applicat
 const registryFileSchema = z.object({
   serverUrl: z.string().optional(),
   boss: z
-    .object({ name: z.string().min(1), project: z.string(), session: z.string().min(1) })
+    .object({
+      name: z.string().min(1),
+      project: z.string(),
+      session: z.string().min(1),
+      role: z.string().min(1).optional(),
+    })
     .optional(),
   agents: z
-    .array(z.object({ name: z.string().min(1), project: z.string(), session: z.string().min(1) }))
+    .array(
+      z.object({
+        name: z.string().min(1),
+        project: z.string(),
+        session: z.string().min(1),
+        // Peer-messaging role (coordinator, developer, ...). Absent = the
+        // agent can neither send nor be addressed as a peer role.
+        role: z.string().min(1).optional(),
+      }),
+    )
     .default([]),
 });
+
+/** Roles the policy treats as singletons; an agent may not claim them (a typo
+ *  like `"role": "boss"` would otherwise inherit the boss policy row). */
+export const RESERVED_ROLES = ['human', 'boss', 'all'] as const;
+
+/** A role must be one token: no spaces, commas, colons or newlines (it is used
+ *  as a JSON key, a CLI-ish address and a policy lookup). */
+const ROLE_PATTERN = /^[a-z][a-z0-9_-]*$/;
+
+/** Agent names become identities and prefix text: no separator characters. */
+const AGENT_NAME_PATTERN = /^[^\s,:]+$/;
 
 const EMPTY: RegistrySnapshot = { serverUrl: null, boss: null, agents: [] };
 
@@ -111,13 +136,49 @@ export class JsonRegistryReader implements ChatRegistry {
         `Registry file ${this.#filePath} is malformed: ${parsed.error.issues[0]?.message ?? 'invalid'}`,
       );
     }
+    // Semantic validation the schema cannot express. All of it is loud on
+    // purpose: each case is a silent mis-targeting or privilege trap.
+    for (const entry of parsed.data.boss ? [parsed.data.boss, ...parsed.data.agents] : parsed.data.agents) {
+      if (!AGENT_NAME_PATTERN.test(entry.name)) {
+        throw new AppError(
+          500,
+          'registry_unavailable',
+          `Registry file ${this.#filePath}: agent name must not contain whitespace, a comma or a colon: ${JSON.stringify(entry.name)}`,
+        );
+      }
+      if (entry.role === undefined) continue;
+      if (!ROLE_PATTERN.test(entry.role)) {
+        throw new AppError(
+          500,
+          'registry_unavailable',
+          `Registry file ${this.#filePath}: role must be lowercase letters, digits, "_" or "-": ${JSON.stringify(entry.role)}`,
+        );
+      }
+      if ((RESERVED_ROLES as readonly string[]).includes(entry.role)) {
+        throw new AppError(
+          500,
+          'registry_unavailable',
+          `Registry file ${this.#filePath}: "${entry.role}" is a reserved role and cannot be assigned to an agent`,
+        );
+      }
+    }
     const boss = parsed.data.boss
-      ? { name: parsed.data.boss.name, project: parsed.data.boss.project, session: parsed.data.boss.session }
+      ? {
+          name: parsed.data.boss.name,
+          project: parsed.data.boss.project,
+          session: parsed.data.boss.session,
+          ...(parsed.data.boss.role === undefined ? {} : { role: parsed.data.boss.role }),
+        }
       : null;
     return {
       serverUrl: parsed.data.serverUrl ?? null,
       boss,
-      agents: parsed.data.agents.map((a) => ({ name: a.name, project: a.project, session: a.session })),
+      agents: parsed.data.agents.map((a) => ({
+        name: a.name,
+        project: a.project,
+        session: a.session,
+        ...(a.role === undefined ? {} : { role: a.role }),
+      })),
     };
   }
 }

@@ -101,13 +101,13 @@ describe('ChatService.sendMessage — fan-out (bridge.mjs:390-443)', () => {
     expect(savedRows(f)).toEqual([]);
   });
 
-  it('records lastPromptFrom per target even when that target fails', async () => {
+  it('a failed prompt is never observed, so its reply falls back to boss', async () => {
     const f = makeChatFixture(registry);
     f.opencode.promptOutcome.set('ses_taskflow', 'timeout');
     await f.service.sendMessage({ to: 'all', message: 'x', from: 'human' });
     await f.service.handleEvent({
       kind: 'reply', from: 'taskflow', to: null, body: 'late', sessionId: 'ses_taskflow', ts: '2026-11-17T10:00:00.000Z',
     });
-    expect(savedRows(f).at(-1)?.to).toBe('human');
+    expect(savedRows(f).at(-1)?.to).toBe('boss');
   });
 });
