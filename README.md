@@ -130,10 +130,11 @@ this is how the reference deployment runs.
 ## Registering a project head
 
 The `registering-lobby-agents` skill handles the full flow (agents can run it
-for their human): dedup check, coordinator provisioning (template copy, or
-append/align the Lobby section in an existing coordinator), one identity
-message telling the agent its registered name, session creation titled
-`(<name>)<project>`, and registry registration in `config/agents.json`:
+for their human): dedup check, agent-file provisioning (copy the template; an
+existing file is replaced, merged or backed up on the human's choice), session
+creation titled `(<name>)<project>`, registry registration in
+`config/agents.json`, and finally one identity message telling the agent its
+registered name:
 
 ```jsonc
 { "name": "taskflow", "project": "TaskFlow", "session": "ses_..." }
@@ -197,10 +198,11 @@ Local-trusted auth: no login system. Optionally, create the gitignored file
 the run directory — no override variable) with `{"authToken": "..."}` — when
 present, ONLY the send endpoints (`/send`, `/prompt`) require that bearer
 token; the live event stream (`/api/events`) and all reads stay open (an
-EventSource cannot send the header). Limitation: with a token set, the
-dashboard composer's send/prompt calls return 401 — the UI has no token entry
-yet (same-host trusted-client UI; token-based UI auth is a post-cutover
-follow-up). Absent file = open local access, as before.
+EventSource cannot send the header). With a token set, the dashboard's Settings
+takes that token (shared-token mode) and keeps it for the tab. With identities
+configured (`.data/peer-auth.json`) the dashboard auto-connects as `human`
+instead - no paste, a loopback `HttpOnly` session cookie. Absent both files =
+open local access, as before.
 
 Development (two processes): `npm run dev -w server` on :3006 plus
 `npm run dev -w web` on :3000 (proxies API calls to :3006).
@@ -309,7 +311,7 @@ session first engages with the lobby (the lobby `AGENTS.md` points here).
 | `.memory/boss/local-context.example.md` | Local-memory template |
 | `projects/` | Machine-local project workspaces (gitignored; created by setup) |
 | `.memory/boss/decision-authority.md` | Decision-authority rule + escalation list (committed, public) |
-| `.placeholder/agent/coordinator.md` | Project-head coordinator template |
+| `.placeholder/agent/` | Agent templates: `scrum-master.md` (orchestrator for new projects), `coordinator.md` (the older orchestrator, for existing projects and re-registration), plus the peer briefs |
 | `.opencode/skills/` | Lobby skills — see **Skills** below |
 | `.archives/docs/PROJECT_ANALYSIS.md` | Pre-migration project analysis (human-authored input; local archive, gitignored) |
 | `incoming_messages.txt` | Pre-db message log archive (gitignored) |
@@ -322,9 +324,10 @@ exceeds ~5 entries.
 
 | Skill | Purpose |
 |---|---|
-| `registering-lobby-agents` | Register a project-head session into the lobby (dedup check → name → provision → register → report) |
+| `creating-lobby-projects` | Scaffold a new project: directory, `## Agents-Lobby` pointer, `opencode.json` default agent, orchestrator file |
+| `registering-lobby-agents` | Register one agent session into the lobby (dedup check → name → provision → session → registry row → identity message → report) |
 | `moving-projects-into-lobby` | Move a project into/out of the `projects/` workstation folder (lock escalation, worktree repair, static-path sweep, session re-bind) |
 
 ## Not (yet) supported
 
-Agent-to-agent direct messaging, delivery receipts, retries UI.
+Delivery receipts, retries UI.

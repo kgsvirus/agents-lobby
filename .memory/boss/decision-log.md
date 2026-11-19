@@ -254,12 +254,51 @@
   Disconnect signs out the tab's UI; the cookie itself is browser-wide.
   - approved (design + implementation; commit pending the human)
 
+- **D31** One orchestrator per project, two templates by purpose - **do not
+  delete `coordinator.md`**: `.placeholder/agent/scrum-master.md` is what new
+  projects ship and what `default_agent` names; `.placeholder/agent/coordinator.md`
+  is KEPT (2026-11-19) because re-spawning a TaskFlow agent (greg/ruben/Dummy)
+  needs its coordinator template - deleting it would leave hand-writing as the
+  only way back. Both are `mode: primary`; their model-routing text is
+  byte-identical so they cannot tell an agent different things, and neither
+  carries a lobby section (the rules live only in `PROTOCOL.md`). Existing
+  projects keep their own `coordinator.md` copies and new projects get
+  scrum-master. The **role** `coordinator` in `agents.json` / the peer
+  allowlist is policy, unrelated to either file. (Absorbs the former D33;
+  archived in `amnesia.md`.) - approved (apply without commit)
+
+- **D32** Model routing lives in the orchestrator templates only:
+  `scrum-master.md` and `coordinator.md` carry the full policy inline,
+  byte-identical; no peer agent carries a copy or a pointer, and
+  `docs/model-routing.md` was created then deleted. The rules themselves are
+  unchanged (no explicit `model` on dispatch, the target's own frontmatter is
+  the source of truth, no hardcoded IDs, no configured model -> stop and ask, no
+  override without explicit human authorization, this policy outranks installed
+  skills). - approved (apply without commit)
+
+- **D34** Registration contract: (a) order is session creation, then the
+  `agents.json` row, then the identity message - a message cannot be sent before
+  the session exists, and it must not claim "registered" before the row is
+  written; (b) the row is **updated when the session is already listed** and
+  appended only otherwise - one session must never appear twice (a duplicate
+  name gives `409 ambiguous_sender`, a duplicate session keeps attributing
+  replies to the old name); (c) all three project invariants from
+  `creating-lobby-projects` are applied (steps 3-5), so a written
+  `default_agent` always names a file that exists; (d) an existing agent file
+  is never overwritten silently - the human chooses **replace / merge /
+  backup** (merge keeps existing lines and frontmatter, adds only missing body
+  sections; backup = `.bak-YYYYMMDD-HHmmss` then replace). - approved (apply
+  without commit)
+
 ## Open items (system-level)
 
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
   typing into agent sessions is invisible in the log; only their replies are
   captured). Accepted v1 gap; extension = zero-token fix if wanted.
-- **O08** Agent-to-agent direct messaging - out of scope for v1.
+- **O08** Agent-to-agent direct messaging - **DELIVERED**, not out of scope:
+  peer `/send` with role-based addressing, the allowlist policy, and the wake
+  boundary (D22, D27, D28; rules in `PROTOCOL.md`). Kept here only as the record
+  of the original v1 boundary; nothing is pending on it.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
 - **O11** `server/test/chat-dedup.test.ts` "busy retries YIELD the event loop"

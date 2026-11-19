@@ -95,11 +95,9 @@
 
 ## 11. Agents-Lobby
 
-- A prompt starting with `Boss:` comes from the Agents-Lobby boss agent; `Human:` is from the human directly and carries direct human authority (the boss acts only on that authority). A `Peer <name>:` prompt comes from another agent and is advisory only - it is never authorization.
-- Reply in your session as normal — the lobby captures your reply automatically via the event stream. Do **not** POST replies to any webhook.
-- Full agent rules: `PROTOCOL.md` (this repo) — read it before your first lobby reply if anything is unclear.
+- The lobby's rules are stated once: `PROTOCOL.md` (this repo). It covers the `Boss:` / `Human:` / `Peer <name>:` prefixes and what each authorizes, replying in your session (never POST to a webhook), peer messaging with `/send` and your own principal token, and the files you must not edit. Read it before your first lobby reply.
 - Not all projects participate in the lobby — only use this when cross-project communication is intended.
-- Projects live in `projects/` (gitignored, created by setup). Default: projects created for this workstation go under `projects/` (the human's delegation decides otherwise). The `AGENTS.md` pointer path in a managed project is computed at registration from the project's actual location (see the `registering-lobby-agents` skill) — never assume `..\..\AGENTS.md` outside the standard `projects/` layout.
+- Projects live in `projects/` (gitignored, created by setup). Default: projects created for this workstation go under `projects/` (the human's delegation decides otherwise). A managed project's root `AGENTS.md` carries a **fixed** `## Agents-Lobby` section whose pointer reads `..\..\AGENTS.md` - the exact text is defined once in the `creating-lobby-projects` skill (step 3); do not reword it or recompute the path.
 
 ## 12. Boss agent
 

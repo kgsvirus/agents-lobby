@@ -24,12 +24,24 @@ posting there returns 404/405.
 - An agent without a `role` cannot send or be addressed at all.
 - Your message is archived exactly once under its `messageId`, so retrying the
   same request is safe: the second attempt returns the first result and sends
-  nothing again.
+  nothing again. That covers a delivery that may or may not have landed - a
+  **refusal** is not a retry case: see "A refused send stops the task".
 - Replies are explicit: to answer a peer, send it a new `/send`. The lobby does
   not auto-forward your turn text, so a normal reply in your session is
   captured for the chat history but does not start another turn for the peer.
 - Only traffic addressed to `boss` wakes the boss. Peer-to-peer messages and
   your replies to the human are visible in the chat history but wake nobody.
+
+## A refused send stops the task
+
+If a send is refused - `403 forbidden_pair`, `403 no_role`, `409
+ambiguous_sender`, `404 no_targets`, a missing or rejected token, anything -
+the task stops there: **pause, hold the work, report the refusal and what you
+were trying to do, and wait for feedback.** Do not pick another recipient, do
+not edit policy or credentials to unblock yourself, do not split the message to
+slip past the rule, and do not carry on as if it had been delivered. The same
+applies to a recipient that cannot be addressed at all (an agent without a
+`role`): report it rather than working around it.
 
 ## Identity: who is talking to you
 
