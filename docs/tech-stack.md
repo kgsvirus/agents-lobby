@@ -69,25 +69,26 @@ export is safe).
 | Gate | `npm test` (currently 44 files / 390 tests) |
 | Onboarding | `node setup.mjs` — prerequisites, registry template, `projects/` |
 
-## Machine constraints (verified 2026-11-19)
+## Machine constraints
 
-The repo lives on **F:, an exFAT volume**. exFAT has no symlinks and no reparse
-points, which has three concrete consequences:
+**The repo lives on E:, an NTFS volume** (moved from F:, exFAT, on 2026-11-19).
+That move removed both blockers this section used to describe:
 
-1. **`next build` fails on F:** — webpack resolves through `fs.readlink`, and
-   on exFAT that call returns `EISDIR` even for a regular file
-   (`EISDIR ... readlink node_modules/next/dist/pages/_app.js`). Build the
-   static export on an **NTFS** volume (E: is NTFS) and copy `web/out/` back.
-2. **npm cannot link the workspaces here** — `npm install` aborts with
-   `EISDIR ... symlink web -> node_modules/@agents-lobby/web`. Creating a
-   symlink on this machine requires elevation or Developer Mode (tested on both
-   volumes).
-3. Working workaround used for dependency changes: update the manifests and
-   lockfile with `npm install <pkg> -w <workspace> --package-lock-only`, then
-   place the package under `node_modules/<pkg>` from its registry tarball and
-   check its integrity against the lockfile.
+1. **`next build` runs in place.** It used to abort on F: because webpack
+   resolves through `fs.readlink`, and exFAT returns `EISDIR` for a regular file
+   (`EISDIR ... readlink node_modules/next/dist/pages/_app.js`). On NTFS the
+   same call returns `EINVAL`, and the export builds normally into `web/out/`.
+2. **npm workspace linking is still unproven on this machine.** Creating a
+   *symlink* needs elevation or Developer Mode here (tested on both volumes);
+   *junctions* work without it. If `npm install` fails with
+   `EISDIR/EPERM ... symlink web -> node_modules/@agents-lobby/web`, enable
+   Developer Mode or run the install from an elevated shell.
+3. Historical workaround for F: (no longer needed): `npm install <pkg> -w <ws>
+   --package-lock-only`, then place the package under `node_modules/<pkg>` from
+   its registry tarball, verifying the sha512 against the lockfile; and build
+   the export in a separate NTFS clone. Keep only the integrity check habit.
 
-`npm test`, `tsc --noEmit` and the Fastify server all run fine from F:.
+`npm test`, `tsc --noEmit`, `next build` and the Fastify server all run from E:.
 
 ## Where the rest lives
 

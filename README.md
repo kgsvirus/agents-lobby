@@ -79,10 +79,10 @@ tree-shaking ships only what is used. v1 sets `aria-hidden` on icons by
 default, so an icon-only control needs its own `aria-label`; v1 also has no
 brand icons.
 
-**Machine note:** this repo lives on **F: (exFAT)**, which cannot symlink and
-cannot `readlink`. `next build` therefore fails here (`EISDIR ... readlink`);
-build the static export on an NTFS volume and copy `web/out/` back. `npm test`
-and the server run fine on F:. Details: `docs/tech-stack.md`.
+**Machine note:** the repo lives on **E: (NTFS)**, moved there from F: (exFAT)
+on 2026-11-19. Everything runs in place now, including `next build`. npm
+workspace linking is still unproven here — installing may need Developer Mode or
+an elevated shell. Details: `docs/tech-stack.md`.
 
 ## Message visibility
 
@@ -354,6 +354,7 @@ exceeds ~5 entries.
 | `creating-lobby-projects` | Scaffold a new project: directory, `## Agents-Lobby` pointer, `opencode.json` default agent, orchestrator file |
 | `registering-lobby-agents` | Register one agent session into the lobby (dedup check → name → provision → session → registry row → identity message → report) |
 | `moving-projects-into-lobby` | Move a project into/out of the `projects/` workstation folder (lock escalation, worktree repair, static-path sweep, session re-bind) |
+| `moving-the-lobby` | Move the lobby repo itself to another drive/folder (volume check, nested-repo sweep, worktree gitfile, boss-last session re-bind) |
 
 ## Not (yet) supported
 

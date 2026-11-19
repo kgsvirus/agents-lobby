@@ -314,6 +314,17 @@
   points at it rather than repeating it. Kept in sync by editing the reference,
   not the copies. - approved (apply without commit)
 
+- **D38** Moving the lobby repo is its own procedure:
+  `.opencode/skills/moving-the-lobby/SKILL.md`. Shared mechanics (phases,
+  worktrees, `safe.directory`, path sweep, lock ladder) stay defined once in
+  `moving-projects-into-lobby` and are referenced, not copied. The skill adds
+  what a project move does not need: destination must be NTFS (exFAT breaks
+  `readlink`, symlinks and workspace linking), copy != move (keep the source
+  until verified), per-repo sweep including every project, rewrite the OpenCode
+  worktree `gitdir:` lines, re-bind sessions with **boss last**, and verify with
+  `npm test` + `npm run build -w web` + `/ui` before deleting the old tree.
+  - approved (apply without commit)
+
 ## Open items (system-level)
 
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
