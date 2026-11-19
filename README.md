@@ -39,6 +39,23 @@ After cloning (in the repo folder):
 
 The message store is a SQLite database, auto-created on first start.
 
+### Peer-messaging tokens
+
+Agents and the dashboard authenticate with principal tokens. `setup.mjs` never
+mints them (a token a setup run produces is still a secret); generate them once
+`config/agents.json` lists your agents:
+
+```
+node gen-peer-tokens.mjs            # mint for human, boss and every registered agent
+node gen-peer-tokens.mjs ruben      # rotate one identity, leave the rest untouched
+node gen-peer-tokens.mjs --prune    # also drop tokens whose name is no longer registered
+```
+
+It writes `.data/peer-auth.json` (gitignored - the only place tokens live) and
+prints each new token once. The file must be readable by the server and by the
+agents that send; rotating a token immediately invalidates the old one for
+whoever holds it. Format and the identity/role rules are in "Identities" below.
+
 Full setup details in the "Installation / setup procedure" section below.
 
 ## How it works
@@ -275,17 +292,9 @@ of going through the Boss relay.
   disagrees (403); with it absent the legacy open `from`-body mode stays in
   force.
 
-  Mint or rotate tokens with the script (it writes the file directly):
-
-  ```
-  node gen-peer-tokens.mjs            # rotate every identity: human, boss, each registered agent
-  node gen-peer-tokens.mjs ruben      # rotate one identity, leave the others untouched
-  node gen-peer-tokens.mjs --prune    # also drop tokens for identities no longer registered
-  ```
-
-  New tokens print once, in full; rotate only what you must, because every
-  rotated token breaks whoever holds the old one. `setup.mjs` never rotates or
-  generates tokens for exactly that reason.
+  Mint or rotate them with `node gen-peer-tokens.mjs` - see "Peer-messaging
+  tokens" under Installation for the three invocations and the rotation
+  warning.
 - **Dashboard:** with identities configured (`.data/peer-auth.json`), Settings
   auto-connects this browser as `human` - no paste: the server mints a loopback
   `HttpOnly; SameSite=Strict` session cookie (`POST /api/connect`), and
