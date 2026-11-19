@@ -96,10 +96,10 @@ so the server can message it.
      immediately; no waiting.
 
 5. **Register:** append to
-   `<lobby repo root>/agents.json` (the lobby repo this skill lives in) inside `agents`:
+   `<lobby repo root>/config/agents.json` (the lobby repo this skill lives in) inside `agents`:
 
    ```json
-   { "name": "<human's name>", "project": "<project name>", "session": "ses_..." }
+   { "name": "<human's name>", "project": "<project name>", "session": "ses_...", "role": "<role>" }
    ```
 
    The server re-reads `agents.json` on every request - no restart needed.

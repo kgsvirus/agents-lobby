@@ -27,7 +27,7 @@ Environment variables (all optional — see
 | `LOBBY_DB_PATH` | `.data/dev.db` | SQLite file (gitignored, auto-created). Relative to cwd. Never points at the canonical db. |
 | `LOBBY_OPENCODE_TIMEOUT_MS` | `30000` | Upstream OpenCode timeout (adapter, Phase 3). |
 | `LOBBY_OPENCODE_SERVER_URL` | none | Fallback OpenCode URL; discovery stays inside the Phase 3 adapter. |
-| `LOBBY_REGISTRY_PATH` | `agents.json` | Registry file, re-read per request (bridge-faithful). Absent file = empty registry (fresh clone); a present-but-malformed file fails that request (500). |
+| `LOBBY_REGISTRY_PATH` | `config/agents.json` | Registry file, re-read per request (bridge-faithful). Absent file = empty registry (fresh clone); a present-but-malformed file fails that request (500). |
 
 **Auth:** optional shared-secret bearer token read ONLY from the gitignored
 file `.data/server.auth.json` (`{ "authToken": "..." }`). Absent file = open

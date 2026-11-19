@@ -18,8 +18,10 @@
 > "Memory governance" section. Removed memory is archived to `amnesia.md`
 > (gitignored, dated, with reason).
 >
-> Last updated: 2026-11-19 (D26 architectural migration + snapshot sync;
-> governance rules moved to behavior.md).
+> Last updated: 2026-11-19 (D27 role-based peer policy, D28 wake boundary,
+> D29 policy/credential files not agent-editable; O11 flake noted; D26
+> architectural migration + snapshot sync; governance rules moved to
+> behavior.md).
 
 ## System snapshot (universal facts)
 
@@ -216,6 +218,31 @@
   `docs/migration/architecture.md` + cutover runbook. Supersedes the
   bridge-era snapshot below and D10's UI stack. - approved (executed)
 
+- **D27** Peer policy is ROLE-based (supersedes the same day's name-based ACL):
+  `agents.json` carries an optional `role` per agent (absent = inert: it can
+  neither send nor be addressed); `config/peer-to-peer-allowlist.json` maps
+  role -> roles it may address, with no wildcard; `to` accepts a role (fans out
+  to every holder, one row naming them, one prompt each), an agent name (only
+  if that agent's role is permitted), `boss`, or `human` (archive-only). Peers
+  may not use `to: "all"`. Registry validation is loud: reserved roles
+  (`human`/`boss`/`all`), invalid role or name characters are refused at load,
+  and a duplicated agent name stays listable but cannot send
+  (`409 ambiguous_sender`). - approved
+
+- **D28** Wake boundary: the boss is woken ONLY by traffic addressed to `boss`
+  (plus legacy null-receiver captures). Every human row, peer-to-peer row and
+  agent -> human reply is excluded from the slice, and a wake with nothing
+  unread prompts nobody (no empty wakes). Supersedes D23's amendment (which
+  kept the human's direct sends to agents in the slice) and the earlier
+  peer-only exclusion. - approved
+
+- **D29** Policy and credential files are not agent-editable: `agents.json`
+  (registry + roles), `config/peer-to-peer-allowlist.json` and
+  `.data/peer-auth.json` change only on an explicit human or boss instruction;
+  agents ask, they do not self-serve - a role, a pair or a token edit is
+  privilege escalation. Standing rule in `PROTOCOL.md` ("Policy and
+  credentials are not yours to edit"). - approved
+
 ## Open items (system-level)
 
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
@@ -224,3 +251,11 @@
 - **O08** Agent-to-agent direct messaging - out of scope for v1.
 - **O10** Per-project memory separation (human idea): split machine memories
   into per-project files as deployments grow. Noted; not called for yet.
+- **O11** `server/test/chat-dedup.test.ts` "busy retries YIELD the event loop"
+  is load-flaky: it asserts a wall-clock timer-tick floor (>=3 ticks in ~1.4 s)
+  and fails in roughly half of full-suite runs while passing in isolation. The
+  behaviour it guards (async yield instead of a synchronous park) is real and
+  covered by the design; the test's timing dependency is the defect. Fix by
+  removing the wall-clock dependency (fake clock or deterministic tick
+  accounting), never by lowering the floor. Noted 2026-11-19 from the ruben
+  review; the maintenance-ledger original was deleted with its workspace.
