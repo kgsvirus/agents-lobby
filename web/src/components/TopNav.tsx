@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -163,7 +164,9 @@ export function TopNav({
             <Settings className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>Settings</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Settings</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuCheckboxItem
               checked={theme === 'dark'}
