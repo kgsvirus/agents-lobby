@@ -274,6 +274,18 @@ of going through the Boss relay.
   `/send` derives the sender from the token and rejects a body `from` that
   disagrees (403); with it absent the legacy open `from`-body mode stays in
   force.
+
+  Mint or rotate tokens with the script (it writes the file directly):
+
+  ```
+  node gen-peer-tokens.mjs            # rotate every identity: human, boss, each registered agent
+  node gen-peer-tokens.mjs ruben      # rotate one identity, leave the others untouched
+  node gen-peer-tokens.mjs --prune    # also drop tokens for identities no longer registered
+  ```
+
+  New tokens print once, in full; rotate only what you must, because every
+  rotated token breaks whoever holds the old one. `setup.mjs` never rotates or
+  generates tokens for exactly that reason.
 - **Dashboard:** with identities configured (`.data/peer-auth.json`), Settings
   auto-connects this browser as `human` - no paste: the server mints a loopback
   `HttpOnly; SameSite=Strict` session cookie (`POST /api/connect`), and

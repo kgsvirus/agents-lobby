@@ -90,7 +90,7 @@ try {
 if (fsSync.existsSync(PEER_AUTH)) {
   report.push(`OK   ${PEER_AUTH} exists (principal tokens, gitignored)`);
 } else {
-  report.push(`NOTE no ${PEER_AUTH} - peer sends stay closed until you create it: {"tokens": {"<token>": {"name": "ruben", "kind": "agent"}}}`);
+  report.push(`NOTE no ${PEER_AUTH} - peer sends stay closed until you create it: {"tokens": {"<token>": {"name": "ruben", "kind": "agent"}}} (or run: node gen-peer-tokens.mjs)`);
 }
 
 // 3. Install checks (existing installs) - READ-ONLY: this script never
