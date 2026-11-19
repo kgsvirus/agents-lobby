@@ -325,6 +325,19 @@
   `npm test` + `npm run build -w web` + `/ui` before deleting the old tree.
   - approved (apply without commit)
 
+- **D39** The dashboard's UI system is **shadcn/ui** (`base-nova` style, Base UI
+  primitives), with its design tokens mapped to this dashboard's existing
+  palette in `web/src/app/globals.css` — adopting components is a refactor, not
+  a restyle. The shell uses the shadcn Sidebar (collapsible to icons, off-canvas
+  on small screens), header breadcrumb, and a settings DropdownMenu with a
+  Connection Dialog. The chat module uses Avatar/Tooltip/Separator/Skeleton,
+  Popover+Checkbox for recipients, and sonner toasts. Kept from the old stack:
+  our own `Button` and `components/ui/utils` helper — the registry overwrites
+  both and pulls `cn`/`next-themes`/Geist, which this app does not use.
+  `ScrollArea` was tried and dropped: ChatFeed's scroll anchoring is bound to
+  the scroll container element. The Projects module keeps its iframe mockup
+  (human decision). - approved (apply without commit)
+
 ## Open items (system-level)
 
 - **O02** Listener does NOT capture agent-session user inbox items (desktop

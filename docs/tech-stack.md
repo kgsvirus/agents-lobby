@@ -40,8 +40,10 @@ API/config reference: `server/README.md`.
 | UI runtime | **React 19** |
 | Language | **TypeScript 5.9** |
 | Styling | **Tailwind CSS v4** via `@tailwindcss/postcss` |
-| Components | shadcn-style, hand-rolled: `class-variance-authority` + `clsx` + `tailwind-merge` (`src/components/ui/button.tsx`) — no Radix installed |
+| Components | **shadcn/ui** (style `base-nova`, built on **Base UI**) — `src/components/ui/*`, added with `npx shadcn@latest add <name>`. The shared `Button` is ours (cva + our palette); the registry's Button is NOT used |
+| Styling | **Tailwind CSS v4** via `@tailwindcss/postcss`; semantic tokens in `globals.css` mapped to this dashboard's existing hexes |
 | Icons | **lucide-react 1.x** |
+| Toasts | **sonner** (`<Toaster>` in `app/layout.tsx`) |
 | Delivery | `output: 'export'` → static `web/out`, served by Fastify at `/ui`; `basePath: '/ui'` |
 | Dev server | `next dev` proxies `/api`, `/send`, `/prompt` to Fastify (`127.0.0.1:3006`, overridable with `LOBBY_API_TARGET`) |
 
@@ -59,6 +61,21 @@ export is safe).
 - v1 removed all brand icons.
 - Sizing/colour/stroke-width defaults can be set once with `<LucideProvider>`
   from `lucide-react`.
+
+### UI components (shadcn/ui)
+
+- `web/components.json` — style `base-nova` (**Base UI** primitives), aliases
+  `@/components` and `@/lib/utils`. Add components with
+  `npx shadcn@latest add <name>` run from `web/`.
+- **Do not let the CLI overwrite `src/components/ui/button.tsx` or
+  `src/lib/utils.ts`.** The registry ships its own Button and a `cn` re-export
+  of the third-party `cn` package; ours (cva + clsx + tailwind-merge) is the
+  one in use. If the CLI writes `from "cn"`, rewrite it to `from "@/lib/utils"`.
+- `init` also pulls `next/font/google` (Geist) and `next-themes`. Neither is
+  used here: the layout keeps its own pre-hydration theme script, and
+  `ui/sonner.tsx` is adapted to the local `useTheme`.
+- Design tokens live in `src/app/globals.css` (mapped to this dashboard's
+  existing palette). Change the look there, not per component.
 
 ## Tests and tooling
 
@@ -78,11 +95,10 @@ That move removed both blockers this section used to describe:
    resolves through `fs.readlink`, and exFAT returns `EISDIR` for a regular file
    (`EISDIR ... readlink node_modules/next/dist/pages/_app.js`). On NTFS the
    same call returns `EINVAL`, and the export builds normally into `web/out/`.
-2. **npm workspace linking is still unproven on this machine.** Creating a
-   *symlink* needs elevation or Developer Mode here (tested on both volumes);
-   *junctions* work without it. If `npm install` fails with
-   `EISDIR/EPERM ... symlink web -> node_modules/@agents-lobby/web`, enable
-   Developer Mode or run the install from an elevated shell.
+2. **npm workspace linking is verified working on E:** (2026-11-20):
+   `npm install <pkg> -w web` creates the workspace link and installs normally.
+   The old F: failure is history; only a repo on exFAT still needs Developer
+   Mode or elevation.
 3. Historical workaround for F: (no longer needed): `npm install <pkg> -w <ws>
    --package-lock-only`, then place the package under `node_modules/<pkg>` from
    its registry tarball, verifying the sha512 against the lockfile; and build

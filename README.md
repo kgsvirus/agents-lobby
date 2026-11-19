@@ -66,7 +66,7 @@ Node **24+**, ESM, TypeScript 5.9, npm workspaces (`server/`, `web/`). Each
 | Layer | Stack |
 |---|---|
 | Backend (`server/`) | Fastify 5 · zod 4 · better-sqlite3 12 + Drizzle ORM 0.45 (drizzle-kit migrations) · SSE event stream · modular monolith (domain / application / infrastructure / presentation) |
-| Frontend (`web/`) | Next.js 15 (App Router) · React 19 · Tailwind CSS v4 · shadcn-style components (class-variance-authority, clsx, tailwind-merge) · **lucide-react 1.x** icons |
+| Frontend (`web/`) | Next.js 15 (App Router) · React 19 · Tailwind CSS v4 · **shadcn/ui** on Base UI (tokens mapped to our palette) · **lucide-react 1.x** icons · sonner toasts |
 | Delivery | Static Next.js export (`output: 'export'`, `basePath: '/ui'`) served by Fastify at `/ui` — client-side only, no SSR / Server Actions / db access |
 | Tests | Vitest 3 (root config scopes `server/test/**` + `web/test/**`); web tests use jsdom + Testing Library |
 | Tooling | `tsx` (dev) · `tsc` (build) · `drizzle-kit` (migrations) · `setup.mjs` (onboarding) |
@@ -80,9 +80,8 @@ default, so an icon-only control needs its own `aria-label`; v1 also has no
 brand icons.
 
 **Machine note:** the repo lives on **E: (NTFS)**, moved there from F: (exFAT)
-on 2026-11-19. Everything runs in place now, including `next build`. npm
-workspace linking is still unproven here — installing may need Developer Mode or
-an elevated shell. Details: `docs/tech-stack.md`.
+on 2026-11-19. Everything runs in place now, including `next build` and
+`npm install -w web`. Details: `docs/tech-stack.md`.
 
 ## Message visibility
 
