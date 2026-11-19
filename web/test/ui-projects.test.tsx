@@ -3,7 +3,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ProjectsNav } from '../src/components/ProjectsSidebar';
+import { ProjectDetail } from '../src/components/ProjectDetail';
 import { PHASES } from '../src/lib/phases';
+import { PHASE_COUNTS } from '../src/lib/workitems';
 import type { Agent } from '../src/lib/api';
 
 afterEach(cleanup);
@@ -54,5 +56,34 @@ describe('ProjectsNav', () => {
   it('reports the chevron state through aria-expanded', () => {
     renderNav({ expanded: new Set(['TaskFlow']) });
     expect(screen.getByLabelText('Collapse TaskFlow').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps the real phase number and index when the list is filtered', () => {
+    // Regression: the offset came from the filtered array, so a search that
+    // left only one phase renumbered it as "Phase 1" and selected phase 0.
+    const onSelect = vi.fn();
+    renderNav({ expanded: new Set(['TaskFlow']), onSelect });
+    fireEvent.change(screen.getByPlaceholderText('Search projects and phases…'), {
+      target: { value: 'test' },
+    });
+    fireEvent.click(screen.getByText('Phase 6 · Testing'));
+    expect(onSelect).toHaveBeenCalledWith('TaskFlow', 5);
+  });
+
+  it('says "No matches" when a search finds nothing', () => {
+    renderNav();
+    fireEvent.change(screen.getByPlaceholderText('Search projects and phases…'), {
+      target: { value: 'zzzz' },
+    });
+    expect(screen.getByText('No matches.')).toBeTruthy();
+  });
+
+  it('still shows seeded items for a project with no registered agents', () => {
+    // Regression: the fallback agents existed in the data but the filter set
+    // was empty, so a project without agents showed an empty board.
+    render(
+      <ProjectDetail project="first-project" phaseIndex={0} agents={[]} lastActivity={{}} />,
+    );
+    expect(screen.getByText(`${PHASE_COUNTS[0]} items`)).toBeTruthy();
   });
 });

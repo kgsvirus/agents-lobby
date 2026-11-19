@@ -107,4 +107,34 @@ describe('FlowBoard', () => {
     expect(column).toBeTruthy();
     expect(within(column as HTMLElement).getByText('No items')).toBeTruthy();
   });
+
+  it('re-checks the agent facet when the project roster changes', () => {
+    // Regression: the agent set was seeded once, so a project switch (or an
+    // agent registering mid-session) filtered every card out.
+    const first = seedWorkItems('TaskFlow', 0, ['greg']);
+    const { rerender } = render(
+      <FlowBoard phaseIndex={0} phaseLabel="Planning" agentNames={['greg']} items={first} />,
+    );
+    expect(screen.getByText(`${first.length} items`)).toBeTruthy();
+
+    const second = seedWorkItems('ImmigApp', 0, ['marvin']);
+    rerender(
+      <FlowBoard phaseIndex={0} phaseLabel="Planning" agentNames={['marvin']} items={second} />,
+    );
+    expect(screen.getByText(`${second.length} items`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Filter: all/ })).toBeTruthy();
+  });
+
+  it('never shows a negative filter count', () => {
+    const items = seedWorkItems('TaskFlow', 0, ['greg', 'ruben']);
+    const { rerender } = render(
+      <FlowBoard phaseIndex={0} phaseLabel="Planning" agentNames={['greg', 'ruben']} items={items} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Filter:/ }));
+    fireEvent.click(screen.getByLabelText('ruben'));
+    fireEvent.click(screen.getByRole('button', { name: /Filter:/ }));
+    // Roster shrinks below the current selection.
+    rerender(<FlowBoard phaseIndex={0} phaseLabel="Planning" agentNames={['greg']} items={items} />);
+    expect(screen.queryByText(/Filter: -/)).toBeNull();
+  });
 });

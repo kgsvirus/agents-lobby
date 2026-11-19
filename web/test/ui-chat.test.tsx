@@ -117,6 +117,19 @@ describe('MessageBubble', () => {
     expect(container.textContent).not.toContain('**');
   });
 
+  it('opens links in a new tab and does not embed remote images', () => {
+    const { container } = render(
+      <TooltipProvider>
+        <MessageBubble m={msg(5, 'boss', '[site](https://example.com) ![shot](https://t.example/p.png)')} />
+      </TooltipProvider>,
+    );
+    const link = screen.getByRole('link', { name: 'site' });
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noreferrer');
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).toContain('[image: shot]');
+  });
+
   it('no longer renders an avatar chip in the label', () => {
     const { container } = render(
       <TooltipProvider>
