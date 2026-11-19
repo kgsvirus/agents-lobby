@@ -193,14 +193,6 @@
   decides otherwise), pointers to `PROTOCOL.md` and `boss.md`. Boss
   behavior still lives only in the Boss agent definition. - approved
 
-## Open items (system-level)
-
-- **O02** Listener does NOT capture agent-session user inbox items (desktop
-  typing into agent sessions is invisible in the log; only their replies are
-  captured). Accepted v1 gap; extension = zero-token fix if wanted.
-- **O08** Agent-to-agent direct messaging - out of scope for v1.
-- **O10** Per-project memory separation (human idea): split machine memories
-  into per-project files as deployments grow. Noted; not called for yet.
 - **D25** Lobby-owned instructions (supersedes D08 global-install step; refines D22/D24): the user-global AGENTS.md no longer carries lobby or general instructions - AGENTS.md in this repo is the single instruction hub (audience: any session in the lobby or its managed projects; content: the human general AI-development instructions 1-10 merged from global + lobby rules 11 + the D22 boss-boundary note 12). Managed projects carry a thin pointer section in their root AGENTS.md (read ..\\..\\AGENTS.md before work) - ambient parent discovery does not apply (nested git repos stop at their own root, verified against the instructions docs). setup.mjs no longer writes to the user global file (new-user onboarding touches nothing outside the lobby folder); .placeholder/agents-md-section.md retired; registering skill provisions pointer-form; the per-project catalog stays in local-context (machine-specific). Existing projects own instructions otherwise preserved. - approved
 
 - **D26** Architectural migration (human mission, 2026-11-17/18 - approved and
@@ -223,3 +215,12 @@
   `--fix` (port guard, sidecar-safe backup, install/build). Detail:
   `docs/migration/architecture.md` + cutover runbook. Supersedes the
   bridge-era snapshot below and D10's UI stack. - approved (executed)
+
+## Open items (system-level)
+
+- **O02** Listener does NOT capture agent-session user inbox items (desktop
+  typing into agent sessions is invisible in the log; only their replies are
+  captured). Accepted v1 gap; extension = zero-token fix if wanted.
+- **O08** Agent-to-agent direct messaging - out of scope for v1.
+- **O10** Per-project memory separation (human idea): split machine memories
+  into per-project files as deployments grow. Noted; not called for yet.
