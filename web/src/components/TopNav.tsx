@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Building2,
   FolderKanban,
@@ -19,6 +19,25 @@ import {
 } from '../lib/api';
 import type { Theme } from '../lib/theme';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Separator } from './ui/separator';
+import { SidebarTrigger } from './ui/sidebar';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 
 export type Module = 'chat' | 'projects' | 'office';
 
@@ -39,8 +58,7 @@ export function TopNav({
   theme: Theme;
   onTheme: (t: Theme) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [connectionOpen, setConnectionOpen] = useState(false);
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [tokenDraft, setTokenDraft] = useState('');
   const [identity, setIdentity] = useState<string | null>(null);
@@ -111,161 +129,109 @@ export function TopNav({
     }
   };
 
-  // Close on outside click (the icon re-click closes via its own handler) or Escape.
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!menuRef.current?.parentElement?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
   return (
-    <nav className="relative flex items-center border-b border-gray-300 bg-gray-100 px-3 py-1.5 dark:border-gray-700 dark:bg-[#161616]">
-      <h1 className="text-sm font-bold text-gray-900 dark:text-white">
-        Agents Lobby
-      </h1>
-      <div className="mx-3 h-4 w-px bg-gray-300 dark:bg-gray-600" />
-      <div className="flex items-center gap-1">
-      {MODULES.map((m) => (
-        <Button
-          key={m.id}
-          variant={module === m.id ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => onModule(m.id)}
-          aria-current={module === m.id ? 'page' : undefined}
-          className={`items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
-            module === m.id
-              ? 'bg-blue-700 text-white dark:bg-blue-600'
-              : 'text-gray-900 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          <m.Icon size={14} className="shrink-0" />
-          {m.label}
-        </Button>
-      ))}
-      </div>
-      <div className="ml-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen((o) => !o)}
-          title="Settings"
-          aria-label="Settings"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          className={`px-2 py-1 text-sm ${
-            open
-              ? 'bg-gray-300 dark:bg-gray-600'
-              : 'text-gray-900 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          <Settings size={16} />
-        </Button>
-        {open && (
-          <div
-            ref={menuRef}
-            className="absolute right-2 top-full z-10 mt-1 w-48 rounded-md border border-gray-300 bg-white p-2 shadow-lg dark:border-gray-600 dark:bg-[#222]"
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-3">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
+      <h1 className="text-sm font-bold text-foreground">Agents Lobby</h1>
+
+      <div className="ml-3 flex items-center gap-1">
+        {MODULES.map((m) => (
+          <Button
+            key={m.id}
+            variant={module === m.id ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onModule(m.id)}
+            aria-current={module === m.id ? 'page' : undefined}
+            className={`items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
+              module === m.id
+                ? 'bg-blue-700 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-600'
+                : 'text-gray-900 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700'
+            }`}
           >
-            <div className="flex items-center justify-between gap-2 px-1 py-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
-                role="switch"
-                aria-label="Toggle dark or light theme"
-                aria-checked={theme === 'dark'}
-                title="Toggle theme"
-                className={`relative h-5 w-10 rounded-full ${
-                  theme === 'dark' ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-500'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow ${
-                    theme === 'dark' ? 'left-[22px]' : 'left-0.5'
-                  }`}
-                />
-              </Button>
-              <span className="text-xs text-gray-900 dark:text-gray-200">Dark / Light</span>
-            </div>
-            <div className="mt-1 border-t border-gray-200 px-1 pt-2 dark:border-gray-600">
-              {mode === null ? null : identity !== null ? (
-                <>
-                  <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
-                    Connected as {identity}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void disconnect()}
-                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-semibold hover:bg-gray-100 dark:border-gray-600 dark:bg-[#2a2a2a] dark:hover:bg-[#333]"
-                  >
-                    Disconnect
-                  </Button>
-                </>
-              ) : mode === 'identity' ? (
-                <>
-                  <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
-                    Not connected
-                  </p>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => void connect()}
-                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
-                  >
-                    Connect this browser
-                  </Button>
-                </>
-              ) : mode === 'shared-token' ? (
-                <>
-                  <label
-                    htmlFor="human-token"
-                    className="block text-xs text-gray-900 dark:text-gray-200"
-                  >
-                    Human token
-                  </label>
-                  <input
-                    id="human-token"
-                    type="password"
-                    value={tokenDraft}
-                    onChange={(e) => setTokenDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void connect();
-                    }}
-                    placeholder="paste token"
-                    autoComplete="off"
-                    className="mt-1 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-[#1b1b1b] dark:text-gray-100"
-                  />
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => void connect()}
-                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
-                  >
-                    Connect
-                  </Button>
-                </>
-              ) : (
-                <p className="mt-1 text-xs text-gray-900 dark:text-gray-200">
-                  No identities configured - sends are open locally.
-                </p>
-              )}
-              {connectError !== '' && (
-                <p className="mt-1 text-xs text-red-700 dark:text-red-500">{connectError}</p>
-              )}
-            </div>
-          </div>
-        )}
+            <m.Icon size={14} className="shrink-0" />
+            {m.label}
+          </Button>
+        ))}
       </div>
-    </nav>
+
+      <div className="ml-auto">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon-sm" aria-label="Settings" />}
+          >
+            <Settings className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel>Settings</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={theme === 'dark'}
+              onCheckedChange={(checked) => onTheme(checked ? 'dark' : 'light')}
+            >
+              Dark mode
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setConnectionOpen(true)}>Connection…</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connection</DialogTitle>
+            <DialogDescription>
+              How this browser talks to the lobby. Identity mode connects silently; shared-token
+              mode needs the token pasted here.
+            </DialogDescription>
+          </DialogHeader>
+
+          {mode === null ? (
+            <p className="text-sm text-muted-foreground">Checking…</p>
+          ) : identity !== null ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm">Connected as {identity}</p>
+              <Button variant="outline" onClick={() => void disconnect()} className="w-full">
+                Disconnect
+              </Button>
+            </div>
+          ) : mode === 'identity' ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm">Not connected</p>
+              <Button onClick={() => void connect()} className="w-full">
+                Connect this browser
+              </Button>
+            </div>
+          ) : mode === 'shared-token' ? (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="human-token" className="text-sm">
+                Human token
+              </label>
+              <Input
+                id="human-token"
+                type="password"
+                value={tokenDraft}
+                onChange={(e) => setTokenDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void connect();
+                }}
+                placeholder="paste token"
+                autoComplete="off"
+              />
+              <Button onClick={() => void connect()} className="w-full">
+                Connect
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No identities configured — sends are open locally.
+            </p>
+          )}
+
+          {connectError !== '' && <p className="text-sm text-destructive">{connectError}</p>}
+        </DialogContent>
+      </Dialog>
+    </header>
   );
 }

@@ -1,4 +1,112 @@
 /* Tailwind v4 — same setup as the legacy app's src/index.css. */
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Tokens are mapped to the palette this dashboard already uses, so adopting
+   shadcn components is a refactor, not a restyle. Restyling later means
+   editing these values only. */
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: var(--font-sans);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+    --background: #f9fafb;
+    --foreground: #111827;
+    --card: #ffffff;
+    --card-foreground: #111827;
+    --popover: #ffffff;
+    --popover-foreground: #111827;
+    --primary: #1d4ed8;
+    --primary-foreground: #ffffff;
+    --secondary: #f3f4f6;
+    --secondary-foreground: #111827;
+    --muted: #f3f4f6;
+    --muted-foreground: #4b5563;
+    --accent: #e5e7eb;
+    --accent-foreground: #111827;
+    --destructive: #dc2626;
+    --border: #d1d5db;
+    --input: #d1d5db;
+    --ring: #3b82f6;
+    --radius: 0.5rem;
+    --sidebar: #f3f4f6;
+    --sidebar-foreground: #111827;
+    --sidebar-primary: #1d4ed8;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e5e7eb;
+    --sidebar-accent-foreground: #111827;
+    --sidebar-border: #d1d5db;
+    --sidebar-ring: #3b82f6;
+}
+
+.dark {
+    --background: #111111;
+    --foreground: #e5e7eb;
+    --card: #1b1b1b;
+    --card-foreground: #e5e7eb;
+    --popover: #222222;
+    --popover-foreground: #e5e7eb;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --secondary: #2a2a2a;
+    --secondary-foreground: #e5e7eb;
+    --muted: #2a2a2a;
+    --muted-foreground: #9ca3af;
+    --accent: #2a2a2a;
+    --accent-foreground: #e5e7eb;
+    --destructive: #ef4444;
+    --border: #374151;
+    --input: #374151;
+    --ring: #3b82f6;
+    --radius: 0.5rem;
+    --sidebar: #181818;
+    --sidebar-foreground: #e5e7eb;
+    --sidebar-primary: #1d4ed8;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #2a2a2a;
+    --sidebar-accent-foreground: #e5e7eb;
+    --sidebar-border: #374151;
+    --sidebar-ring: #3b82f6;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

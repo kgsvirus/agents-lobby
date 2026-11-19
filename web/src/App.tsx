@@ -4,10 +4,26 @@ import { Agent, View, fetchAgents, fetchLastActivity, fetchLocalProjects } from 
 import { useMessages, viewKey } from './hooks/useMessages';
 import { useTheme } from './hooks/useTheme';
 import { TopNav, Module } from './components/TopNav';
-import { Sidebar } from './components/Sidebar';
-import { ProjectsSidebar } from './components/ProjectsSidebar';
+import { ChatNav } from './components/Sidebar';
+import { ProjectsNav } from './components/ProjectsSidebar';
 import { ChatFeed } from './components/ChatFeed';
 import { Composer } from './components/Composer';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+} from './components/ui/sidebar';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from './components/ui/breadcrumb';
 
 // Client-side only (static export; no SSR data fetching, no Server Actions,
 // no db access — decision 2). Sidebar collapse state is read in a mount
@@ -53,41 +69,78 @@ export default function App() {
           ? view.name
           : `${view.name} — ${agents.find((a) => a.name === view.name)?.project ?? ''}`;
 
+  const moduleLabel = module === 'chat' ? 'Chat room' : module === 'projects' ? 'Projects' : 'Office';
+
   return (
-    <div className="flex h-screen flex-col bg-gray-50 font-sans text-gray-900 dark:bg-[#111] dark:text-gray-200">
-      <TopNav module={module} onModule={setModule} theme={theme} onTheme={selectTheme} />
-      {/* Chat stays MOUNTED but hidden across module round-trips: this
-          preserves ChatFeed reading position and the Composer draft.
-          Projects/Office remain plain conditional mounts. */}
-      <div
-        className="flex min-h-0 flex-1"
-        style={module === 'chat' ? undefined : { display: 'none' }}
-      >
-          <Sidebar
-            agents={agents}
-            recents={recents}
-            lastActivity={lastActivity}
-            view={view}
-            collapsed={collapsed}
-            onToggleExpand={(p) =>
-              setCollapsed((prev) => {
-                const next = new Set(prev);
-                next.has(p) ? next.delete(p) : next.add(p);
-                try {
-                  localStorage.setItem('lobby.sidebar.collapsed', JSON.stringify([...next]));
-                } catch {
-                  /* storage unavailable — session-only */
+    <SidebarProvider className="h-svh overflow-hidden">
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="border-b border-sidebar-border px-2 py-2">
+          <span className="truncate px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase group-data-[collapsible=icon]:hidden">
+            {moduleLabel}
+          </span>
+        </SidebarHeader>
+        <SidebarContent>
+          {module === 'chat' && (
+            <SidebarGroup>
+              <SidebarGroupLabel>Conversations</SidebarGroupLabel>
+              <ChatNav
+                agents={agents}
+                recents={recents}
+                lastActivity={lastActivity}
+                view={view}
+                collapsed={collapsed}
+                onToggleExpand={(p) =>
+                  setCollapsed((prev) => {
+                    const next = new Set(prev);
+                    next.has(p) ? next.delete(p) : next.add(p);
+                    try {
+                      localStorage.setItem('lobby.sidebar.collapsed', JSON.stringify([...next]));
+                    } catch {
+                      /* storage unavailable — session-only */
+                    }
+                    return next;
+                  })
                 }
-                return next;
-              })
-            }
-            onSelect={(v) => setView(v)}
-          />
+                onSelect={(v) => setView(v)}
+              />
+            </SidebarGroup>
+          )}
+          {module === 'projects' && (
+            <SidebarGroup>
+              <SidebarGroupLabel>Folders</SidebarGroupLabel>
+              <ProjectsNav
+                projects={localProjects}
+                selected={projectSelection}
+                onSelect={setProjectSelection}
+              />
+            </SidebarGroup>
+          )}
+        </SidebarContent>
+      </Sidebar>
+
+      <SidebarInset className="min-h-0">
+        <TopNav module={module} onModule={setModule} theme={theme} onTheme={selectTheme} />
+
+        {/* Chat stays MOUNTED but hidden across module round-trips: this
+            preserves ChatFeed reading position and the Composer draft.
+            Projects/Office remain plain conditional mounts. */}
+        <div
+          className="flex min-h-0 flex-1"
+          style={module === 'chat' ? undefined : { display: 'none' }}
+        >
           <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex items-center bg-gray-100 px-3 py-2 dark:bg-[#161616]">
-              <span className="text-[18px] font-bold text-gray-900 dark:text-white">
-                {title}
-              </span>
+            <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2">
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <span className="text-muted-foreground">Chat room</span>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{title}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
             </div>
             <ChatFeed
               active={module === 'chat'}
@@ -107,26 +160,22 @@ export default function App() {
             />
           </div>
         </div>
-      {module === 'projects' && (
-        <div className="flex min-h-0 flex-1">
-          <ProjectsSidebar
-            projects={localProjects}
-            selected={projectSelection}
-            onSelect={setProjectSelection}
-          />
-          {/* <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-gray-600 dark:text-gray-400">
-            {projectSelection
-              ? `Projects — ${projectSelection}`
-              : 'Projects — select a project'}
-          </div> */}
-          <iframe src="/ui/mockups/kanban-board-mockup.html" title="Mockup" style={{flex: 1}}></iframe>
-        </div>
-      )}
-      {module === 'office' && (
-        <div className="flex min-h-0 flex-1 items-center justify-center text-gray-600 dark:text-gray-400">
-          Office — coming soon
-        </div>
-      )}
-    </div>
+
+        {module === 'projects' && (
+          <div className="flex min-h-0 flex-1">
+            <iframe src="/ui/mockups/kanban-board-mockup.html" title="Mockup" style={{ flex: 1 }}></iframe>
+          </div>
+        )}
+
+        {module === 'office' && (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center">
+              <p className="text-sm font-semibold">Office</p>
+              <p className="mt-1 text-sm text-muted-foreground">Coming soon.</p>
+            </div>
+          </div>
+        )}
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

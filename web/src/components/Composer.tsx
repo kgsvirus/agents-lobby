@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Send } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, LoaderCircle, Send } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Agent,
   ApiError,
@@ -10,6 +11,8 @@ import {
   sendMessage,
 } from '../lib/api';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 interface Props {
   agents: Agent[];
@@ -23,29 +26,8 @@ export function Composer({ agents, view, onSent }: Props) {
     () => new Set(defaultTargets(view, agents)),
   );
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ right: number; bottom: number } | null>(null);
   const [text, setText] = useState('');
-  const [error, setError] = useState('');
-  const pickerRef = useRef<HTMLButtonElement>(null);
-
-  // Escape closes the recipient picker, like the settings menu in TopNav.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
-
-  const toggle = () => {
-    if (!open && pickerRef.current) {
-      const r = pickerRef.current.getBoundingClientRect();
-      // Fixed positioning: the menu floats above everything, bottom-anchored to the picker.
-      setPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 4 });
-    }
-    setOpen(!open);
-  };
+  const [sending, setSending] = useState(false);
 
   // Boss view: compose always prompts the boss — the picker is disabled and
   // submit is forced to promptBoss even if picked somehow holds targets.
@@ -59,7 +41,7 @@ export function Composer({ agents, view, onSent }: Props) {
     defaults.length > 0 &&
     picked.size === defaults.length &&
     [...picked].every((p) => defaults.includes(p));
-  const canSend = bossMode || picked.size > 0;
+  const canSend = (bossMode || picked.size > 0) && !sending;
   const label = bossMode
     ? 'boss'
     : allMode
@@ -74,21 +56,28 @@ export function Composer({ agents, view, onSent }: Props) {
     const body = text.trim();
     if (!body || !canSend) return;
     const action = composeTarget(view, picked);
+    setSending(true);
     try {
       if (action.kind === 'prompt') await promptBoss(body);
       else await sendMessage(action.to, body, 'human');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      toast.error(err instanceof ApiError ? err.message : String(err));
+      setSending(false);
       return;
     }
-    setError('');
+    setSending(false);
     setText('');
     onSent();
   };
 
+  const toggleTarget = (name: string, checked: boolean) => {
+    const next = new Set(picked);
+    checked ? next.add(name) : next.delete(name);
+    setPicked(next);
+  };
+
   return (
-    <div className="relative border-t border-gray-300 bg-gray-100 p-2.5 dark:border-gray-700 dark:bg-[#161616]">
-      {error && <div className="pb-1 text-right text-[10px] text-red-700 dark:text-red-500">{error}</div>}
+    <div className="border-t border-border bg-sidebar p-2.5">
       <div className="flex gap-1.5">
         <textarea
           value={text}
@@ -96,35 +85,30 @@ export function Composer({ agents, view, onSent }: Props) {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              submit();
+              void submit();
             }
           }}
           rows={3}
           placeholder="Type a message…"
-          className="min-h-[calc(1.45em*3+16px)] flex-1 resize-y rounded-lg border border-gray-300 bg-white px-2.5 py-2 font-[inherit] text-gray-900 dark:border-gray-700 dark:bg-[#222] dark:text-gray-200"
+          className="min-h-[calc(1.45em*3+16px)] flex-1 resize-y rounded-lg border border-border bg-background px-2.5 py-2 font-[inherit] text-foreground"
         />
         <div className="relative flex flex-col gap-1.5">
-          {open && <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />}
-          <Button
-            ref={pickerRef}
-            variant="ghost"
-            onClick={toggle}
-            disabled={bossMode}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            className={`gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[inherit] text-gray-900 hover:bg-white dark:border-gray-700 dark:bg-[#222] dark:text-gray-200 dark:hover:bg-[#222] ${
-              bossMode ? 'cursor-not-allowed opacity-50' : ''
-            }`}
-          >
-            To: {label} <ChevronDown size={14} className="shrink-0" />
-          </Button>
-          {open && pos && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-              <div
-                className="fixed z-50 min-w-[200px] rounded-lg border border-gray-700 bg-gray-100 p-1.5 shadow-lg dark:bg-[#222]"
-                style={{ right: pos.right, bottom: pos.bottom }}
-              >
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  disabled={bossMode}
+                  aria-label={`Recipients: ${label}`}
+                  className={`gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[inherit] text-foreground hover:bg-muted ${
+                    bossMode ? 'cursor-not-allowed opacity-50' : ''
+                  }`}
+                />
+              }
+            >
+              To: {label} <ChevronDown size={14} className="shrink-0" />
+            </PopoverTrigger>
+            <PopoverContent align="end" side="top" className="w-64 p-1.5">
               {(view.kind === 'project'
                 ? agents.filter((a) => a.project === view.name)
                 : view.kind === 'agent'
@@ -133,35 +117,34 @@ export function Composer({ agents, view, onSent }: Props) {
               ).map((a) => (
                 <label
                   key={a.name}
-                  className="flex cursor-pointer items-start gap-2 rounded px-2 py-1 hover:bg-gray-200 dark:hover:bg-[#2a2a2a]"
+                  className="flex cursor-pointer items-start gap-2 rounded px-2 py-1 hover:bg-muted"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     className="mt-0.5"
                     checked={picked.has(a.name)}
-                    onChange={(e) => {
-                      const next = new Set(picked);
-                      e.target.checked ? next.add(a.name) : next.delete(a.name);
-                      setPicked(next);
-                    }}
+                    onCheckedChange={(checked) => toggleTarget(a.name, checked === true)}
                   />
                   <span>
                     {a.name}
-                    <span className="block text-[10px] text-gray-600 dark:text-gray-400">{a.project}</span>
+                    <span className="block text-[10px] text-muted-foreground">{a.project}</span>
                   </span>
                 </label>
               ))}
-              </div>
-            </>
-          )}
+            </PopoverContent>
+          </Popover>
           <Button
-            onClick={submit}
+            onClick={() => void submit()}
             disabled={!canSend}
             className={`rounded-lg px-4 py-1.5 font-[inherit] ${
               canSend ? '' : 'cursor-not-allowed opacity-50'
             }`}
           >
-            <Send size={14} className="shrink-0" /> Send
+            {sending ? (
+              <LoaderCircle size={14} className="shrink-0 animate-spin" />
+            ) : (
+              <Send size={14} className="shrink-0" />
+            )}
+            Send
           </Button>
         </div>
       </div>

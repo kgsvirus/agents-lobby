@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, MessageSquare } from 'lucide-react';
 import type { Message } from '../lib/api';
 import { MessageBubble } from './MessageBubble';
+import { Separator } from './ui/separator';
+import { Skeleton } from './ui/skeleton';
 
 export function ChatFeed({
   active = true,
@@ -171,17 +173,27 @@ export function ChatFeed({
             <LoaderCircle size={12} className="animate-spin" /> loading earlier messages…
           </span>
         ) : msgs.length > 0 && !hasMore ? (
-          <span>— beginning of conversation —</span>
+          <div className="flex w-full items-center gap-2">
+            <Separator className="flex-1" />
+            <span className="shrink-0">beginning of conversation</span>
+            <Separator className="flex-1" />
+          </div>
         ) : null}
       </div>
       {msgs.length === 0 ? (
-        <div className="m-auto flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-          {ready ? 'No messages for this view yet.' : (
-            <>
-              <LoaderCircle size={14} className="animate-spin" /> loading…
-            </>
-          )}
-        </div>
+        ready ? (
+          <div className="m-auto flex flex-col items-center gap-2 text-gray-600 dark:text-gray-400">
+            <MessageSquare size={24} />
+            <p className="text-sm">No messages for this view yet.</p>
+          </div>
+        ) : (
+          <div className="m-auto w-full max-w-md space-y-3">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-10 w-3/4" />
+            <Skeleton className="ml-auto h-3 w-16" />
+            <Skeleton className="ml-auto h-10 w-2/3" />
+          </div>
+        )
       ) : (
         msgs.map((m) => <MessageBubble key={m.id} m={m} directional={directional} />)
       )}

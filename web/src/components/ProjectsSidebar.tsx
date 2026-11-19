@@ -1,4 +1,5 @@
 import { Folder, LayoutGrid } from 'lucide-react';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './ui/sidebar';
 
 interface Props {
   projects: string[];
@@ -6,37 +7,25 @@ interface Props {
   onSelect: (name: string | null) => void;
 }
 
-// Projects module sidebar: ALL + the real machine-local projects folder list
-// (fetchLocalProjects), selectable — the module's main view is a
-// placeholder for now.
-export function ProjectsSidebar({ projects, selected, onSelect }: Props) {
-  const active = (name: string | null) =>
-    selected === name ? 'bg-blue-700/40' : 'hover:bg-gray-200 dark:hover:bg-gray-700';
-
+// Projects module navigation: the machine-local folders, rendered in the same
+// shadcn Sidebar as chat so both modules share one shell.
+export function ProjectsNav({ projects, selected, onSelect }: Props) {
   return (
-    <div className="w-64 shrink-0 overflow-y-auto border-r border-gray-300 bg-gray-100 p-2.5 dark:border-gray-700 dark:bg-[#181818]">
-      <div className="mb-2.5 flex items-center justify-between">
-        <h1 className="text-sm font-bold text-gray-900 dark:text-white">Projects</h1>
-      </div>
-      <button
-        onClick={() => onSelect(null)}
-        aria-current={selected === null || undefined}
-        className={`row flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left ${active(null)}`}
-      >
-        <LayoutGrid size={14} className="shrink-0 text-gray-600 dark:text-gray-400" />
-        <b>ALL</b>
-      </button>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton isActive={selected === null} tooltip="All projects" onClick={() => onSelect(null)}>
+          <LayoutGrid />
+          <span>ALL</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
       {projects.map((name) => (
-        <button
-          key={name}
-          onClick={() => onSelect(name)}
-          aria-current={selected === name || undefined}
-          className={`row flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left ${active(name)}`}
-        >
-          <Folder size={14} className="shrink-0 text-gray-600 dark:text-gray-400" />
-          {name}
-        </button>
+        <SidebarMenuItem key={name}>
+          <SidebarMenuButton isActive={selected === name} tooltip={name} onClick={() => onSelect(name)}>
+            <Folder />
+            <span>{name}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
       ))}
-    </div>
+    </SidebarMenu>
   );
 }

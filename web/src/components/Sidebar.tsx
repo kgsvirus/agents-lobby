@@ -1,5 +1,13 @@
-import { Bot, ChevronDown, ChevronRight, LayoutGrid } from 'lucide-react';
+import { Bot, ChevronDown, ChevronRight, Folder, LayoutGrid } from 'lucide-react';
 import { Agent, Message, View, hh, projectGroups } from '../lib/api';
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from './ui/sidebar';
 
 interface Props {
   agents: Agent[];
@@ -11,11 +19,9 @@ interface Props {
   onSelect: (view: View, el: HTMLElement) => void;
 }
 
-// Shared row shape: real buttons, so the whole navigation is keyboard reachable.
-const ROW =
-  'row cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
-
-export function Sidebar({
+// Chat module navigation. Rendered inside the shadcn Sidebar, so every row is
+// a real button with sidebar-aware focus/hover states and an icon-only rail.
+export function ChatNav({
   agents,
   recents,
   lastActivity,
@@ -48,80 +54,86 @@ export function Sidebar({
 
   const isActive = (v: View) =>
     v.kind === view.kind && ('name' in v ? (view as { name: string }).name === v.name : true);
-  const active = (v: View) =>
-    isActive(v) ? 'bg-blue-700/40' : 'hover:bg-gray-200 dark:hover:bg-gray-700';
+
+  const select = (v: View) => (e: React.MouseEvent<HTMLElement>) =>
+    onSelect(v, e.currentTarget as HTMLElement);
 
   return (
-    <div className="w-64 shrink-0 overflow-y-auto border-r border-gray-300 bg-gray-100 p-2.5 dark:border-gray-700 dark:bg-[#181818]">
-      <button
-        type="button"
-        onClick={(e) => onSelect({ kind: 'boss' }, e.currentTarget)}
-        aria-current={isActive({ kind: 'boss' }) || undefined}
-        className={`${ROW} flex w-full items-center gap-1.5 px-2 py-1.5 text-left ${active({ kind: 'boss' })}`}
-      >
-        <Bot size={14} className="shrink-0 text-gray-600 dark:text-gray-400" />
-        <b>Boss</b>
-        <span className="text-[11px] text-gray-600 dark:text-gray-400">
-          {bossStamp ? ` — ${bossStamp}` : ''}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={(e) => onSelect({ kind: 'all' }, e.currentTarget)}
-        aria-current={isActive({ kind: 'all' }) || undefined}
-        className={`${ROW} flex w-full items-center gap-1.5 px-2 py-1.5 text-left ${active({ kind: 'all' })}`}
-      >
-        <LayoutGrid size={14} className="shrink-0 text-gray-600 dark:text-gray-400" />
-        <b>All projects</b>
-      </button>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton isActive={isActive({ kind: 'boss' })} tooltip="Boss" onClick={select({ kind: 'boss' })}>
+          <Bot />
+          <span>Boss</span>
+          {bossStamp !== '' && (
+            <span className="ml-auto text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
+              {bossStamp}
+            </span>
+          )}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+
+      <SidebarMenuItem>
+        <SidebarMenuButton isActive={isActive({ kind: 'all' })} tooltip="All projects" onClick={select({ kind: 'all' })}>
+          <LayoutGrid />
+          <span>All projects</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+
       {Object.entries(groups).map(([project, list]) => {
         const s = stamp(`project:${project}`, list.map((a) => a.name));
         const isCollapsed = collapsed.has(project);
+        const projectView: View = { kind: 'project', name: project };
         return (
-          <div key={project}>
-            <div
-              className={`${ROW} flex items-center gap-1 px-2 py-1.5 ${active({ kind: 'project', name: project })}`}
-            >
+          <SidebarMenuItem key={project}>
+            <div className="relative">
+              <SidebarMenuButton
+                isActive={isActive(projectView)}
+                tooltip={project}
+                onClick={select(projectView)}
+                className="pr-8 group-data-[collapsible=icon]:pr-2"
+              >
+                <Folder />
+                <span>{project}</span>
+                {s !== '' && (
+                  <span className="ml-auto text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
+                    {s}
+                  </span>
+                )}
+              </SidebarMenuButton>
               <button
                 type="button"
                 onClick={() => onToggleExpand(project)}
                 aria-expanded={!isCollapsed}
                 aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${project}`}
-                className="flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded text-gray-600 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-gray-400 dark:hover:text-white"
+                className="absolute top-1/2 right-1 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none group-data-[collapsible=icon]:hidden"
               >
-                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => onSelect({ kind: 'project', name: project }, e.currentTarget)}
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-left focus-visible:outline-none"
-              >
-                <b>{project}</b>
-                <span className="text-[11px] text-gray-600 dark:text-gray-400">
-                  {s ? ` — ${s}` : ''}
-                </span>
+                {isCollapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
               </button>
             </div>
-            {list.map((a) => {
-              const as = stamp(`agent:${a.name}`, [a.name]);
-              return (
-                <button
-                  key={a.name}
-                  type="button"
-                  className={`${ROW} block w-full py-1 pl-7 text-left text-xs ${active({ kind: 'agent', name: a.name })}`}
-                  style={{ display: isCollapsed ? 'none' : 'block' }}
-                  onClick={(e) => onSelect({ kind: 'agent', name: a.name }, e.currentTarget)}
-                >
-                  {a.name}{' '}
-                  <span className="text-[11px] text-gray-600 dark:text-gray-400">
-                    {as ? ` — ${as}` : ''}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+            {!isCollapsed && (
+              <SidebarMenuSub>
+                {list.map((a) => {
+                  const as = stamp(`agent:${a.name}`, [a.name]);
+                  return (
+                    <SidebarMenuSubItem key={a.name}>
+                      <SidebarMenuSubButton
+                        render={<button type="button" />}
+                        isActive={isActive({ kind: 'agent', name: a.name })}
+                        onClick={select({ kind: 'agent', name: a.name })}
+                      >
+                        <span className="truncate">{a.name}</span>
+                        {as !== '' && (
+                          <span className="ml-auto text-[11px] text-muted-foreground">{as}</span>
+                        )}
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                })}
+              </SidebarMenuSub>
+            )}
+          </SidebarMenuItem>
         );
       })}
-    </div>
+    </SidebarMenu>
   );
 }
