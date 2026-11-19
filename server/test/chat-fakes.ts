@@ -29,6 +29,12 @@ export interface FakeOpenCode {
   resolveSession(sessionId: string): ReturnType<SessionResolver>;
   /** Gate to hold prompt promises open mid-flight (lastPromptFrom race tests). */
   readonly holdPrompts: Set<string>;
+  /** Sessions whose prompts stay PENDING until releasePrompts(sessionId) —
+   *  deterministic interleaving for the wake-race tests (a mid-flight prompt
+   *  has not been enqueued yet, so the pending-input map is untouched). */
+  readonly deferPrompts: Set<string>;
+  /** Resolve every pending deferred prompt for a session (the enqueue ack). */
+  releasePrompts(sessionId: string): void;
 }
 
 export function fakeOpenCode(): FakeOpenCode {
@@ -36,6 +42,8 @@ export function fakeOpenCode(): FakeOpenCode {
   const pendingInput = new Map<string, boolean>();
   const promptOutcome = new Map<string, PortErrorCode>();
   const holdPrompts = new Set<string>();
+  const deferPrompts = new Set<string>();
+  const deferredResolvers = new Map<string, Array<() => void>>();
   let available = true;
   let handler: ((event: NormalizedEvent) => void | Promise<void>) | null = null;
   let resolver: SessionResolver | null = null;
@@ -56,6 +64,20 @@ export function fakeOpenCode(): FakeOpenCode {
       isAvailable: () => available,
       prompt(sessionId, text) {
         promptCalls.push({ sessionId, text });
+        if (deferPrompts.has(sessionId)) {
+          // The parked prompt settles at release time: the outcome map is
+          // read THEN (a late ack can report failure — used by the
+          // wake-race no-row-loss test).
+          return new Promise<void>((resolve, reject) => {
+            const list = deferredResolvers.get(sessionId) ?? [];
+            list.push(() => {
+              const code = promptOutcome.get(sessionId);
+              if (code !== undefined) reject(new PortError(code, 'fake failure'));
+              else resolve();
+            });
+            deferredResolvers.set(sessionId, list);
+          });
+        }
         if (holdPrompts.has(sessionId)) {
           return new Promise<void>(() => {}); // held open until the test resolves it
         }
@@ -77,6 +99,11 @@ export function fakeOpenCode(): FakeOpenCode {
       available = value;
     },
     holdPrompts,
+    deferPrompts,
+    releasePrompts: (sessionId) => {
+      for (const resolve of deferredResolvers.get(sessionId) ?? []) resolve();
+      deferredResolvers.delete(sessionId);
+    },
     deliver: async (event) => {
       if (handler === null) throw new Error('chat sink not subscribed');
       await handler(event);

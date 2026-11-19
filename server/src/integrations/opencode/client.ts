@@ -149,7 +149,10 @@ export function createOpenCodeClient(
  *  (the config fallback is applied by createOpenCodeClient, not here). */
 export function defaultDiscoverServerUrl(): string | null {
   try {
-    const out = spawnSync('opencode', ['service', 'status'], { encoding: 'utf8', shell: true });
+    // One command string, not an args array: with `shell: true` Node only
+    // concatenates args and emits DEP0190 (args are not escaped). The command
+    // is constant, so the shell line is identical either way.
+    const out = spawnSync('opencode service status', { encoding: 'utf8', shell: true });
     const url = (out.stdout || '').trim().split(/\r?\n/)[0] ?? '';
     if (/^https?:\/\//.test(url)) return url;
   } catch {

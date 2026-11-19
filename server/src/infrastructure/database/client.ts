@@ -16,8 +16,13 @@ export interface DbHandle {
   readonly db: LobbyDb;
 }
 
-export function openDatabase(file: string): DbHandle {
-  const sqlite = new Database(file);
+export function openDatabase(file: string, options: Database.Options = {}): DbHandle {
+  // Explicit busy_timeout (better-sqlite3's own default value, made explicit
+  // because the duplicate-capture guard's cross-process guarantee depends on
+  // it): a second instance's ingest transaction waits on the write lock
+  // (BEGIN IMMEDIATE) instead of failing, then sees the committed duplicate.
+  // Tests override it for fast-fail interleaving assertions.
+  const sqlite = new Database(file, { timeout: 5_000, ...options });
   const db = drizzle(sqlite, { schema });
   return { sqlite, db };
 }

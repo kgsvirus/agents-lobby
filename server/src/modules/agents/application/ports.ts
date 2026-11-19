@@ -8,10 +8,9 @@ import type { Agent, RegistrySnapshot } from '../domain/agent.js';
 /** Registry read port — per-request re-read semantics (decision 3, Phase 2
  *  ruling: the FILE stays the runtime source of truth). Structurally
  *  satisfied by the shared Phase 4 JsonRegistryReader
- *  (infrastructure/registry/reader.ts), whose read() also refreshes the
- *  read-only registry_mirror table as an established side effect (chat reads
- *  the registry directly through its port — the table is a projection, not
- *  chat's source); nothing about that contract changes for chat. */
+ *  (infrastructure/registry/reader.ts). Chat reads the registry directly
+ *  through its own port; the agents module owns the db mirror (agents +
+ *  projects) and refreshes it from this snapshot. */
 export interface RegistrySource {
   read(): Promise<RegistrySnapshot>;
 }

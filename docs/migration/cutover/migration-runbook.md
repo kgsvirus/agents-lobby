@@ -237,10 +237,12 @@ worktree remains the source for fixes.
   cutover").
 - Update `README.md` from `docs/migration/cutover/readme-draft.md`; PROTOCOL.md
   needs no change (`docs/migration/cutover/protocol-draft.md`).
-- Optional consolidation flagged by Phase 5: `registry_mirror` (0001) is a
-  write-only projection; merging it into `agents` (0002) is a Boss decision,
-  NOT part of this runbook.
-- ⚠️ First commit should pin migrations 0000–0003 (untracked-file hashes were
+- `registry_mirror` (0001) consolidation: the write-only projection is DROPPED
+  by additive migration `0004` (Boss-approved dual-mirror consolidation,
+  2026-11-19 maintenance cycle); `agents`/`projects` (0002) is the remaining,
+  consumed mirror. No separate cleanup step needed — `0004` applies with the
+  rest at cutover.
+- ⚠️ First commit should pin migrations 0000–0004 (untracked-file hashes were
   unverifiable during development — ledger note, task 7).
 
 ## Unverified items

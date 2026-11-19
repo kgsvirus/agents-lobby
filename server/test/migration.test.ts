@@ -171,6 +171,17 @@ describe('baseline migration', () => {
     await fresh.sqlite.close();
   });
 
+  it('0004 drops the write-only registry_mirror table (dual-mirror consolidation)', async () => {
+    const dir = tempDir();
+    const fresh = openDatabase(join(dir, 'fresh.db'));
+    runMigrations(fresh.db, migrationsFolder());
+    // The consumed mirror (`agents`/`projects`, 0002) survives; the Phase 4
+    // write-only projection is gone.
+    expect(tables(fresh.sqlite)).not.toContain('registry_mirror');
+    expect(tables(fresh.sqlite)).toEqual(expect.arrayContaining(['agents', 'projects']));
+    await fresh.sqlite.close();
+  });
+
   it('the baseline migrates a populated legacy copy in place: legacy tables untouched, data identical', () => {
     const dir = tempDir();
     // Source: canonical copy when present, otherwise a populated legacy-DDL
@@ -214,16 +225,17 @@ describe('baseline migration', () => {
       expectSchemaMatch(before, isolated.sqlite);
 
       // Baseline recorded + events cursor present. The journal now holds the
-      // baseline AND the additive migrations (registry_mirror Phase 4;
-      // projects/agents Phase 5; PK-less rowid rebuild Phase 5 fix round).
+      // baseline AND the additive migrations (projects/agents Phase 5; PK-less
+      // rowid rebuild Phase 5 fix round; registry_mirror dropped in 0004).
       expect(tables(isolated.sqlite)).toContain('events');
       expect(tables(isolated.sqlite)).toEqual(expect.arrayContaining(['agents', 'projects']));
+      expect(tables(isolated.sqlite)).not.toContain('registry_mirror');
       const journal = isolated.sqlite
         .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = '__drizzle_migrations'")
         .get() as { n: number };
       expect(journal.n).toBe(1);
       const applied = isolated.sqlite.prepare('SELECT COUNT(*) AS n FROM __drizzle_migrations').get();
-      expect(applied).toEqual({ n: 4 });
+      expect(applied).toEqual({ n: 5 });
       isolated.sqlite.close();
     } finally {
       before.close();

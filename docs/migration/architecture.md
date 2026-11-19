@@ -62,11 +62,11 @@ agents-lobby/
                              #   resolver), prompts.ts (prompt port + wake text),
                              #   errors.ts (PortError)
       infrastructure/
-        database/{client.ts,schema.ts,migrations/}   # drizzle; migrations 0000–0003
+        database/{client.ts,schema.ts,migrations/}   # drizzle; migrations 0000–0004
         events/bus.ts        # in-process bus; publish = persist to `events` + fan-out
         config/index.ts      # zod-validated env (§ server/README.md table)
         registry/reader.ts   # JsonRegistryReader — agents.json re-read per request/
-                             #   event line + registry_mirror refresh
+                             #   event line (no db writes; registry_mirror dropped)
       shared/{types,schemas,errors}/   # event payload schemas, wire schema, envelope
     test/                    # 23 vitest files (incl. AST surface guard, migration
                              #   equivalence, ui-static)
@@ -109,8 +109,9 @@ activity queries).
 | Concern | Home |
 |---|---|
 | Message rows, views (`all\|boss\|agent:<name>\|project:<name>`), pagination/`hasMore`, bookmarks/unread, wake-slice row filter, HTTP query arithmetic | `modules/chat/domain/` (pure) + `modules/chat/infrastructure/message-repository.ts` (verbatim `store.mjs` SQL, alias `ts AS time, sender AS "from", receiver AS "to", body AS text`) |
-| Capture policy (boss-only filter, wake-echo suppression), reply routing via in-memory `lastPromptFrom` (`"boss"` fallback), `/send` fan-out, `/prompt`, wake orchestration (coalesce → slice → prompt → bookmark-through-slice) | `modules/chat/application/chat-service.ts` — all OpenCode-free: it compares domain names and its own outbox text |
-| Registry (`agents.json`) read: per-request (`read()`) and per-event-line (`loadSync()`) re-reads; `registry_mirror` table is a write-only projection | `infrastructure/registry/reader.ts`; chat and agents consume the reader through their own ports (no cross-module import). The FILE stays the runtime source of truth (MIGRATION.md decision 3) |
+| Capture policy (boss-only filter, wake-echo suppression of the enqueued wake text; boss `text.ended` replies capture UNCONDITIONALLY — Boss ruling 2026-11-19, option (d): the reply to a wake is the relay the human reads), reply routing via in-memory `lastPromptFrom` (`"boss"` fallback), `/send` fan-out, `/prompt`, wake orchestration (single-flight: each attempt queues behind the in-flight one and re-checks after it completes; then coalesce → slice → prompt → bookmark-through-slice) | `modules/chat/application/chat-service.ts` — all OpenCode-free: it compares domain names and its own outbox text |
+| Insert-dedup guard (EVENT CAPTURES ONLY — the OpenCode-listener path; explicit /send + /webhook inserts are never deduped): a capture insert whose sender + receiver (null-safe) + body matches a row whose `ts` is within 100 ms of the incoming capture `ts` is skipped + logged at the repository's `insert()`; a skipped duplicate returns the existing row with `inserted:false` and publishes NO `message.created`; holds across connections via the ingest transaction's `BEGIN IMMEDIATE` + busy_timeout | `modules/chat/infrastructure/message-repository.ts` |
+| Registry (`agents.json`) read: per-request (`read()`) and per-event-line (`loadSync()`) re-reads, no db writes | `infrastructure/registry/reader.ts`; chat and agents consume the reader through their own ports (no cross-module import). The FILE stays the runtime source of truth (MIGRATION.md decision 3) |
 | Agents mirror (`agents` + `projects` tables, `ordinal` file order, rowid-keyed → duplicates preserved) | `modules/agents/` — startup sync + per-request refresh; serves `GET /api/agents` |
 | Local projects listing | `modules/projects/` — filesystem readdir, ENOENT → `[]` |
 | OpenCode protocol (SSE `/api/event`, inbox, prompt, discovery, auth, wake-text format) | `integrations/opencode/` ONLY — nothing else imports OpenCode shapes |
@@ -251,7 +252,9 @@ journal `meta/_journal.json`), applied automatically at startup
 - **Additive:** `0001_rare_thanos.sql` (+`registry_mirror`), `0002_neat_mordo.sql`
   (+`agents`, `projects`), `0003_heavy_scourge.sql` (rowid rebuild of both mirror
   tables with `INSERT…SELECT` data copy — SQLite cannot drop a name PK in place;
-  preserves duplicates, keeps `ordinal`). Existing columns are never
+  preserves duplicates, keeps `ordinal`), `0004_heavy_thing.sql` (drops the
+  write-only `registry_mirror` — dual-mirror consolidation; `agents`/`projects`
+  is the remaining, consumed mirror). Existing columns are never
   dropped/renamed/retyped; no FKs (project is a free-form grouping string, no
   consumer — documented choice).
 - **Copy verification:** `server/.data/verify-copy.db` is a byte COPY of the

@@ -126,7 +126,16 @@ export class EventBus {
     try {
       // Rolls back and rethrows on error — in that case queue is discarded and
       // nothing below runs: no emission for a rolled-back transaction.
-      result = this.#db.transaction(() => fn(persist))();
+      // BEGIN IMMEDIATE, not the default deferred begin: every bus transaction
+      // writes, and the ingest path's duplicate-capture check (chat
+      // repository) must not interleave with another instance's open ingest —
+      // deferred would let two connections both SELECT "no duplicate" before
+      // either writes (the dual-instance failure). IMMEDIATE takes the write
+      // lock at BEGIN: a concurrent connection's transaction waits on the
+      // busy_timeout (openDatabase sets it explicitly), then runs its check
+      // against the committed state and sees the duplicate. Same-process
+      // behavior is unchanged (single connection, synchronous transactions).
+      result = this.#db.transaction(() => fn(persist)).immediate();
       if (result instanceof Promise) {
         // Sync-prefix events of an async callback are already committed AND
         // emitted at this point (consistent state); the async usage itself is

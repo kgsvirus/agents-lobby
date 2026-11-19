@@ -107,25 +107,52 @@ test/     vitest suites
   (`wakeSliceRows`, bridge.mjs:111-113), the HTTP query arithmetic
   (`parseMessageQuery`, bridge.mjs:270-275). No Fastify, no drizzle.
 - `application/` — `ChatService`: capture policy (boss-only filter + wake-echo
-  suppression, bridge.mjs:166-185), reply routing via the in-memory
-  `lastPromptFrom` map with the `"boss"` fallback (bridge.mjs:195), `/send`
-  fan-out (bridge.mjs:390-443), `/prompt` to boss, and the wake orchestration
-  (coalescing → slice → prompt → bookmark-through-the-slice, bridge.mjs:98-130).
+  suppression of the enqueued wake text, bridge.mjs:166-185; boss
+  `text.ended` replies capture UNCONDITIONALLY — Boss ruling 2026-11-19,
+  option (d): the reply to a wake is the relay the human reads), reply routing
+  via the in-memory `lastPromptFrom` map with the `"boss"` fallback
+  (bridge.mjs:195), `/send` fan-out (bridge.mjs:390-443), `/prompt` to boss,
+  and the wake orchestration (single-flight — each attempt queues behind the
+  in-flight one and re-checks after it completes, so overlapping wakes cannot
+  deliver the same rows twice — then coalescing → slice → prompt →
+  bookmark-through-the-slice, bridge.mjs:98-130).
   Ingest is ATOMIC: message row + `message.created` event commit together
-  through `EventBus.transaction()`.
+  through `EventBus.transaction()` (BEGIN IMMEDIATE + busy_timeout). A busy
+  ingest retries within a 15 s budget: every attempt's SYNCHRONOUS driver wait
+  is capped (250 ms) and the retries are separated by an async nap that YIELDS
+  the event loop (timers/HTTP/SSE keep running while a contended capture
+  retries); the cap is re-measured against the remaining budget, and the
+  connection's saved busy_timeout is restored afterwards (the connection is
+  shared with the agents/projects mirror writes, which have no retry loop).
+  The whole read-cap-restore section is serialized through an in-process async
+  ingest chain (waiters AWAIT — no synchronous blocking), so overlapping saves
+  cannot snapshot another save's temporary cap as their "original" value.
+  Exhaustion is loud — `CAPTURE LOST` with the row's IDENTIFYING metadata
+  (from/to/ts/sessionId/body length; the body itself is redacted, message
+  content never reaches the logs) — and rethrows; it is never silently
+  dropped. A skipped duplicate persists no `message.created` (nothing was
+  created).
 - `infrastructure/` — `ChatMessageRepository`: a verbatim SQL port of
   `store.mjs` (same tables, same views/pagination/bookkeeping/lastActivity);
   equivalence with `store.mjs` is asserted in `test/chat-store.test.ts`
   including against `server/.data/verify-copy.db` (a read-only COPY of the
-  canonical db — never touched).
+  canonical db — never touched). Its `insert()` also carries the insert-dedup
+  guard, restricted to EVENT CAPTURES (the OpenCode-listener path): a
+  duplicate capture of the same event (same sender + null-safe receiver +
+  body within a 100 ms window around the incoming capture ts) is skipped +
+  logged, never stored; explicit
+  `/send` and legacy `/webhook` inserts are never deduped. The db-level
+  check holds across connections (the dual-instance failure mode, canonical
+  rows 1461/1462/1463/1464): the ingest transaction takes the write lock at
+  BEGIN (`BEGIN IMMEDIATE`) and the connection busy_timeout makes a second
+  instance wait, then see the committed duplicate.
 - `presentation/` — thin Fastify routes (zod validation + envelope only).
 
 **Registry:** `src/infrastructure/registry/reader.ts` re-reads `agents.json` on
-EVERY read (bridge-faithful; a file swap is reflected on the next request) and
-refreshes the read-only `registry_mirror` db table as a side effect. The
+EVERY read (bridge-faithful; a file swap is reflected on the next request). The
 registry FILE stays the runtime source of truth (decision 3) — chat reads the
-registry directly through its port (the table is a projection, not a source).
-The
+registry directly through its port; the agents module refreshes the `agents`
+mirror from the same snapshot. The
 session resolver for the Phase 3 event stream re-reads the registry per event
 line, exactly like the bridge listener.
 
@@ -154,13 +181,16 @@ stays the runtime registry):
 
 **Schema note:** `projects` holds the DISTINCT project grouping strings of the
 registered agents; `agents` mirrors the agents.json `agents` entries exactly
-(`{name, project, session}` + `ordinal`). The boss lives only in
-`registry_mirror` (it is not part of the agents.json `agents` array and never
-reaches /api/agents). Both mirror tables are ROWID-KEYED (no name PK): the
-bridge serves ALL entries including duplicate names (bridge.mjs:258) —
-uniqueness is not part of the agents.json contract and is not enforced.
+(`{name, project, session}` + `ordinal`). The boss is NOT mirrored in the db
+(it is not part of the agents.json `agents` array and never reaches
+/api/agents); it is read from agents.json itself on every registry read.
+`agents` is ROWID-KEYED (no name PK): the bridge serves ALL entries including
+duplicate names (bridge.mjs:258) — uniqueness is not part of the agents.json
+contract and is not enforced.
 No FK/id columns: project is a plain grouping string in the registry and the
-dashboard aggregates client-side (bridge.mjs:288-290).
+dashboard aggregates client-side (bridge.mjs:288-290). The Phase 4
+`registry_mirror` table was dropped by migration `0004` (dual-mirror
+consolidation).
 
 ## OpenCode integration (Phase 3)
 

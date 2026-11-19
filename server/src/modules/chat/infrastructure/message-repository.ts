@@ -13,10 +13,26 @@
 // the same handle, so the insert joins the transaction).
 import type Database from 'better-sqlite3';
 import { wireMessageSchema, type WireMessage } from '../../../shared/schemas/wire.js';
-import type { MessagePage, NewMessage } from '../domain/message.js';
+import type { MessagePage, NewMessage, WireMessageRow } from '../domain/message.js';
 import type { ChatMessageStore } from '../application/ports.js';
 
 const ROW_COLS = 'id, ts AS time, sender AS "from", receiver AS "to", body AS text';
+
+/** Duplicate-capture window around the INCOMING capture time (work order
+ *  Task 1.2; final-review fix 1). Live evidence: canonical rows 1461/1462 and
+ *  1463/1464 were 1-4 ms apart duplicates while two server instances captured
+ *  the same event — each instance stamps its own capture time on one machine
+ *  with one clock, so the guard only has to cover that few-ms offset. 100 ms is
+ *  ~25x the observed skew, and 50x narrower than the previous 5 s, which
+ *  swallowed DELIBERATE repeats ("yes" ... "yes" seconds apart).
+ *
+ *  shortcut: content + capture-time identity, NOT a source event id — the
+ *  normalized capture event carries no upstream id (`ts` is this instance's
+ *  capture time, integrations/opencode/events.ts:39-41), so two identical
+ *  bodies captured within 100 ms by the same sender are still treated as one
+ *  event. Upgrade when the adapter exposes a stable OpenCode event/item id (put
+ *  it on NormalizedEvent and dedupe on that instead of ts). */
+const DEDUP_WINDOW_MS = 100;
 
 // D11 membership: receiver = 'all' OR exact OR comma-list containing name (spaces normalized).
 const MEMBER_CLAUSE =
@@ -37,6 +53,7 @@ function toWire(row: unknown): WireMessage {
 export class ChatMessageRepository implements ChatMessageStore {
   readonly #db: Database.Database;
   readonly #insertStmt: Database.Statement;
+  readonly #dupStmt: Database.Statement;
   readonly #rowByIdStmt: Database.Statement;
   readonly #bookmarkStmt: Database.Statement;
   readonly #upsertBookmarkStmt: Database.Statement;
@@ -46,6 +63,22 @@ export class ChatMessageRepository implements ChatMessageStore {
     this.#insertStmt = db.prepare(
       'INSERT INTO messages (ts, sender, receiver, body, session_id) VALUES (?, ?, ?, ?, ?)',
     );
+    // Duplicate-capture lookup (work order Task 1.2; review fixes 3-4). The
+    // db-level check is the choke point every event-capture insert goes
+    // through and holds ACROSS connections — two connections to one file are
+    // the dual-instance failure mode (an in-process set would not cover it).
+    // Serialization across connections comes from the ingest transaction's
+    // BEGIN IMMEDIATE (bus.ts) + the connection busy_timeout (client.ts):
+    // the check cannot interleave with another instance's open ingest. `IS`
+    // gives null-safe equality (the webhook path stores a NULL receiver).
+    // The ts bounds are around the INCOMING capture ts (± DEDUP_WINDOW_MS),
+    // not wall-clock now: a duplicate committed while a busy retry waited is
+    // still recognized however long that wait took (final-review fix 1).
+    this.#dupStmt = db.prepare(
+      `SELECT ${ROW_COLS} FROM messages
+       WHERE ts >= ? AND ts <= ? AND sender IS ? AND receiver IS ? AND body IS ?
+       ORDER BY id DESC LIMIT 1`,
+    );
     this.#rowByIdStmt = db.prepare(`SELECT ${ROW_COLS} FROM messages WHERE id = ?`);
     this.#bookmarkStmt = db.prepare('SELECT last_seen_id FROM bookmarks WHERE consumer = ?');
     this.#upsertBookmarkStmt = db.prepare(
@@ -54,9 +87,38 @@ export class ChatMessageRepository implements ChatMessageStore {
     );
   }
 
-  insert(row: NewMessage): WireMessage {
+  insert(
+    row: NewMessage,
+    dedupEventCapture = false,
+  ): { readonly row: WireMessageRow; readonly inserted: boolean } {
+    // Duplicate-capture guard (work order Task 1.2; review fix 3): applies
+    // ONLY to OpenCode event captures (the listener path). A second capture
+    // of the SAME event (identical sender + null-safe receiver + body within
+    // the capture-skew window) is SKIPPED + logged — nothing stored, the
+    // original row untouched; the original row is returned so the ingest
+    // transaction keeps its shape, and `inserted:false` lets the caller skip
+    // the message.created event (no creation happened — final-review fix 4).
+    // Explicit inserts (/send fan-out, legacy /webhook) never dedup: two
+    // identical DELIBERATE sends are two real messages.
+    if (dedupEventCapture) {
+      const captureMs = Date.parse(row.ts);
+      const anchor = Number.isNaN(captureMs) ? Date.now() : captureMs;
+      const dup = this.#dupStmt.get(
+        new Date(anchor - DEDUP_WINDOW_MS).toISOString(),
+        new Date(anchor + DEDUP_WINDOW_MS).toISOString(),
+        row.from,
+        row.to,
+        row.body,
+      ) as RawWireRow | undefined;
+      if (dup !== undefined) {
+        console.warn(
+          `[chat] duplicate capture skipped: identical row ${dup.id} within ${DEDUP_WINDOW_MS}ms (ts=${row.ts}, from=${row.from}, to=${row.to})`,
+        );
+        return { row: toWire(dup), inserted: false };
+      }
+    }
     const r = this.#insertStmt.run(row.ts, row.from, row.to, row.body, row.sessionId);
-    return toWire(this.#rowByIdStmt.get(Number(r.lastInsertRowid)));
+    return { row: toWire(this.#rowByIdStmt.get(Number(r.lastInsertRowid))), inserted: true };
   }
 
   query(params: {
@@ -116,6 +178,21 @@ export class ChatMessageRepository implements ChatMessageStore {
 
   markSeen(consumer: string, throughId: number): void {
     this.#upsertBookmarkStmt.run(consumer, throughId);
+  }
+
+  /** The connection's current SQLite busy_timeout (ms). SQLite names the
+   *  `PRAGMA busy_timeout` result column `timeout` — NOT `busy_timeout`;
+   *  reading the wrong name yields undefined and a 0 fallback, which would
+   *  silently turn the busy handler off. */
+  busyTimeout(): number {
+    const row = this.#db.prepare('PRAGMA busy_timeout').get() as { timeout?: number } | undefined;
+    return Number(row?.timeout ?? 0);
+  }
+
+  /** Sets the connection's busy_timeout (ms). The ingest retry lowers it per
+   *  attempt and RESTORES the saved value afterwards (review round 5). */
+  setBusyTimeout(ms: number): void {
+    this.#db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(ms))}`);
   }
 
   lastActivity(agentNames: readonly string[]): Record<string, string | null> {

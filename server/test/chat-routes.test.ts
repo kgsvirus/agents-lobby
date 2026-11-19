@@ -48,8 +48,8 @@ function setup(opts: { registry?: unknown; authToken?: boolean } = {}): Ctx {
   if (opts.authToken) writeFileSync(authFile, JSON.stringify({ authToken: 'secret123' }));
   const dbPath = makeConfig(dir, env, authFile).dbPath;
   const app = buildApp(makeConfig(dir, env, authFile), { opencode: opencode.integration });
-  // Seeding + mirror checks use a SEPARATE short-lived connection to the same
-  // file (the app owns its own); opened lazily so app.close() never races it.
+  // Seeding uses a SEPARATE short-lived connection to the same file (the app
+  // owns its own); opened lazily so app.close() never races it.
   let raw: Database.Database | null = null;
   const sqlite = (): Database.Database => {
     if (raw === null) raw = new Database(dbPath);
@@ -398,34 +398,6 @@ describe('optional bearer auth (decision 4) — /send + /prompt only', () => {
       const res = await ctx.app.inject({ method: 'POST', url: '/send', payload: { to: 'all', message: 'x' } });
       expect(res.statusCode).toBe(200);
     } finally {
-      await ctx.app.close();
-    }
-  });
-});
-
-describe('registry mirror (Coordinator Phase 2 ruling)', () => {
-  it('a registry read refreshes the db mirror table; a file swap is mirrored too', async () => {
-    const ctx = setup({ registry: REAL_REGISTRY });
-    const db = new Database(ctx.dbPath);
-    try {
-      await ctx.app.ready();
-      await ctx.app.inject({ method: 'GET', url: '/api/last-activity' }); // triggers a registry read
-      const rows = () =>
-        db.prepare('SELECT name, role, project, session FROM registry_mirror ORDER BY role DESC, name').all();
-      expect(rows()).toEqual([
-        { name: 'boss', role: 'boss', project: 'Agents-Lobby', session: 'ses_boss' },
-        { name: 'immigapp', role: 'agent', project: 'ImmigApp', session: 'ses_immigapp' },
-        { name: 'taskflow', role: 'agent', project: 'TaskFlow', session: 'ses_taskflow' },
-      ]);
-
-      ctx.writeRegistry({ ...REAL_REGISTRY, agents: [{ name: 'newagent', project: 'New', session: 'ses_new' }] });
-      await ctx.app.inject({ method: 'GET', url: '/api/last-activity' });
-      expect(rows()).toEqual([
-        { name: 'boss', role: 'boss', project: 'Agents-Lobby', session: 'ses_boss' },
-        { name: 'newagent', role: 'agent', project: 'New', session: 'ses_new' },
-      ]);
-    } finally {
-      db.close();
       await ctx.app.close();
     }
   });

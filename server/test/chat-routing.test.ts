@@ -68,6 +68,20 @@ describe('ChatService.handleEvent — capture policy (bridge.mjs:166-204)', () =
     ]);
   });
 
+  it('a boss reply arriving after a wake IS captured (Boss ruling 2026-11-19, option d: no wake-echo reply suppression — the reply to a wake is the relay the human reads)', async () => {
+    const f = makeChatFixture(registry);
+    f.store.insert({ ts: '2026-11-17T10:00:00.000Z', from: 'taskflow', to: 'human', body: 'agent status', sessionId: null });
+    await f.service.wakeBoss();
+    expect(f.opencode.promptCalls).toHaveLength(1);
+    await f.service.handleEvent({
+      kind: 'reply', from: 'boss', to: null, body: 'boss reacts to the slice', sessionId: 'ses_boss', ts: '2026-11-17T10:00:01.000Z',
+    });
+    expect(savedRows(f).map((r) => [r.from, r.text])).toEqual([
+      ['taskflow', 'agent status'],
+      ['boss', 'boss reacts to the slice'],
+    ]);
+  });
+
   it('routes agent replies to the last prompter; default boss fallback (bridge.mjs:195)', async () => {
     const f = makeChatFixture(registry);
     await f.service.handleEvent({

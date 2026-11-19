@@ -45,20 +45,6 @@ export const events = sqliteTable('events', {
   ts: text('ts').notNull(),
 });
 
-// Read-only mirror of agents.json (Coordinator Phase 2 ruling, Boss-confirmed):
-// the registry FILE stays the runtime source of truth (decision 3); this table
-// is refreshed on every registry read (re-read per request — bridge-faithful).
-// ROWID-KEYED (no name PK — rebuilt additively in 0003): the bridge serves ALL
-// registry entries, INCLUDING duplicate names (bridge.mjs:258 maps the whole
-// array; uniqueness is NOT part of the agents.json contract), so the mirror
-// must hold every entry.
-export const registryMirror = sqliteTable('registry_mirror', {
-  name: text('name').notNull(),
-  role: text('role').notNull(), // 'boss' | 'agent'
-  project: text('project').notNull(),
-  session: text('session').notNull(),
-});
-
 // Phase 5 projects/agents mirror (decision 3 — read-only projection of
 // agents.json, refreshed on every registry read; NO registry CRUD).
 //
@@ -74,9 +60,10 @@ export const projects = sqliteTable('projects', {
 });
 
 // `agents` mirrors the agents.json `agents` ENTRIES exactly ({name, project,
-// session} — agents.example.json). The boss lives only in `registry_mirror`.
-// ROWID-KEYED (no name PK — rebuilt additively in 0003): duplicate agent names
-// are valid agents.json content (the bridge maps and serves every entry,
+// session} — agents.example.json). The boss is NOT mirrored (it is not part of
+// the `agents` array); it is read from agents.json itself on every registry
+// read. ROWID-KEYED (no name PK — rebuilt additively in 0003): duplicate agent
+// names are valid agents.json content (the bridge maps and serves every entry,
 // bridge.mjs:258) — uniqueness is NOT enforced at the boundary, so the mirror
 // must insert all of them. `ordinal` is the entry's index in the agents array
 // and is the one column beyond the entry shape: the mirror serves

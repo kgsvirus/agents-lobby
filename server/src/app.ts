@@ -63,7 +63,7 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
   // Phase 4 chat module wiring: store repository (same sqlite handle as the
   // bus — ingest transaction joins), per-request registry reader, injected
   // (or real) OpenCode ports.
-  const registry = new JsonRegistryReader(db, config.registryPath);
+  const registry = new JsonRegistryReader(config.registryPath);
   const store = new ChatMessageRepository(sqlite);
   // Phase 5 agents module wiring: the SAME per-request registry reader (chat's
   // contract unchanged) plus the read-only agents/projects mirror store.
@@ -71,9 +71,7 @@ export function buildApp(config: AppConfig, options: BuildAppOptions = {}): Fast
   const agentsService = new AgentsService({ registry, mirror: agentMirror });
 
   // Startup registry read ONCE (the bridge reads agents.json once for startup
-  // config, bridge.mjs:14-38): readSync parses it AND refreshes the read-only
-  // registry_mirror table (the reader's established per-read side effect; chat
-  // consumes the registry directly through its port) — the snapshot then seeds
+  // config, bridge.mjs:14-38): readSync parses it — the snapshot then seeds
   // the agents/projects mirror below. An absent file is the graceful
   // empty-registry default; an unreadable/malformed one leaves the mirrors empty here (per-request reads
   // fail loud instead — the bridge exits, the documented new-stack behavior

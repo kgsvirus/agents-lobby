@@ -1,13 +1,20 @@
-import { defineConfig } from 'vitest/config';
+﻿import { defineConfig } from 'vitest/config';
 
 // Scope vitest to the workspace test suites (server + web). The root legacy
 // node:test suites (test/*.test.mjs) are run by `node --test` and must not be
 // swept here. Web tests needing a DOM declare it per-file via
 // @vitest-environment jsdom.
+//
+// `silent: 'passed-only'`: the suites deliberately exercise production code
+// whose log lines are expected output (wake/dedup notices, subscriber and
+// payload failure paths, malformed-fixture notices, stream-reconnect logs), so
+// passing tests do not bleed console output into the gate. A FAILING test
+// still prints its logs.
 export default defineConfig({
   test: {
     include: ['server/test/**/*.test.ts', 'web/test/**/*.test.ts'],
     environment: 'node',
     testTimeout: 15_000,
+    silent: 'passed-only',
   },
 });

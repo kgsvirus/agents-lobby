@@ -2,8 +2,9 @@
 // ruling, Boss-confirmed): the registry FILE stays the runtime source of truth
 // (decision 3); every read() re-reads the file (bridge-faithful — the bridge
 // re-reads per request/per event line, so agents added at runtime are usable
-// without a restart) and refreshes the read-only db mirror table for the
-// Phase 5 agents/projects domains. Registry CRUD is NOT built here.
+// without a restart). Registry CRUD is NOT built here. The agents/projects
+// mirror tables are refreshed by the agents module (AgentsService.replaceAll);
+// this reader no longer writes to the db (registry_mirror was dropped in 0004).
 //
 // Fresh-clone behavior (dev worktree has NO agents.json): an ABSENT file is
 // the documented graceful default — an empty registry (no boss, no agents), so
@@ -13,8 +14,6 @@
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
-import type { LobbyDb } from '../database/client.js';
-import { registryMirror } from '../database/schema.js';
 import { AppError } from '../../shared/errors/index.js';
 import type { ChatRegistry, RegistrySnapshot } from '../../modules/chat/application/ports.js';
 
@@ -53,19 +52,15 @@ export function registryFallbackServerUrl(raw: unknown): string | null {
 }
 
 export class JsonRegistryReader implements ChatRegistry {
-  readonly #db: LobbyDb;
   readonly #filePath: string;
 
-  constructor(db: LobbyDb, filePath: string) {
-    this.#db = db;
+  constructor(filePath: string) {
     this.#filePath = filePath;
   }
 
-  /** Per-request re-read + mirror refresh (async — routes call this). */
+  /** Per-request re-read (async — routes call this). */
   async read(): Promise<RegistrySnapshot> {
-    const snapshot = this.#parse(await this.#readRaw());
-    this.#syncMirror(snapshot);
-    return snapshot;
+    return this.#parse(await this.#readRaw());
   }
 
   /** Synchronous raw loader for createSessionResolver (per-event-line re-read,
@@ -75,11 +70,11 @@ export class JsonRegistryReader implements ChatRegistry {
     return JSON.parse(readFileSync(this.#filePath, 'utf8'));
   }
 
-  /** Synchronous startup read + mirror refresh (decision 3: the bridge reads
-   *  agents.json ONCE at startup, bridge.mjs:14-19, while per-request reads
-   *  stay async). Same semantics as read(): an ABSENT file is the documented
-   *  graceful empty registry; a PRESENT-but-broken file throws (the bridge
-   *  exits loudly there — the composition root decides what to do). */
+  /** Synchronous startup read (decision 3: the bridge reads agents.json ONCE
+   *  at startup, bridge.mjs:14-19, while per-request reads stay async). Same
+   *  semantics as read(): an ABSENT file is the documented graceful empty
+   *  registry; a PRESENT-but-broken file throws (the bridge exits loudly there
+   *  — the composition root decides what to do). */
   readSync(): RegistrySnapshot {
     let raw: unknown;
     try {
@@ -88,9 +83,7 @@ export class JsonRegistryReader implements ChatRegistry {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return EMPTY; // absent = empty registry
       throw err;
     }
-    const snapshot = this.#parse(raw);
-    this.#syncMirror(snapshot);
-    return snapshot;
+    return this.#parse(raw);
   }
 
   async #readRaw(): Promise<unknown> {
@@ -126,19 +119,5 @@ export class JsonRegistryReader implements ChatRegistry {
       boss,
       agents: parsed.data.agents.map((a) => ({ name: a.name, project: a.project, session: a.session })),
     };
-  }
-
-  /** Refresh the read-only mirror table (additive projection; small table). */
-  #syncMirror(snapshot: RegistrySnapshot): void {
-    const rows = snapshot.boss
-      ? [
-          { name: snapshot.boss.name, role: 'boss', project: snapshot.boss.project, session: snapshot.boss.session },
-          ...snapshot.agents.map((a) => ({ name: a.name, role: 'agent', project: a.project, session: a.session })),
-        ]
-      : snapshot.agents.map((a) => ({ name: a.name, role: 'agent', project: a.project, session: a.session }));
-    this.#db.transaction((tx) => {
-      tx.delete(registryMirror).run();
-      for (const row of rows) tx.insert(registryMirror).values(row).run();
-    });
   }
 }
