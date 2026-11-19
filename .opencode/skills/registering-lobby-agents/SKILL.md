@@ -1,135 +1,113 @@
 ---
 name: registering-lobby-agents
-description: Use when a new OpenCode session must be created for a project and registered as a messageable agent in the Agents-Lobby registry (agents.json) — e.g. "add a new agent", "spawn a session for <project>", "register this session in the lobby".
+description: Use when a lobby-managed project needs agent sessions registered in `agents.json` - a new agent, a new project session, or a session the human already created.
 ---
-
-# Skill: registering-lobby-agents
 
 # Registering Lobby Agents
 
-Create an OpenCode session in a project directory (or reuse an existing one),
-provision its coordinator agent, and register it in the Agents-Lobby registry
-so the server can message it.
+Create an OpenCode session for **one agent** in a project directory (or reuse an
+existing one) and register it in the Agents-Lobby registry so the server can
+message it.
 
-## Steps (in order)
+One agent = one session. A project with two agents (`dev`, `qa`) gets two
+sessions, two passages through this skill, two `agents.json` rows - each session
+pinned to its own agent file.
 
-1. **Dedup check:** `GET /api/session?directory=<project dir>` (with auth, below).
-   - If sessions already exist there, confirm with the human: **reuse** one or
-     **create new**.
-     - **Reuse path:** skip the session creation (step 5) — no title needed.
-       Still do step 2 (ask the name), step 3 (provisioning, including the
-       identity message), step 5 (register with the existing session ID),
-       step 6 (report).
-   - If none exist → continue to step 3 (create new).
+## Steps (per agent)
 
+1. **Dedup check:** `GET /api/session?directory=<project dir>` (with auth,
+   below), and compare with `config/agents.json`.
+   - If a session for this agent already exists, confirm with the human:
+     **reuse** it or **create new**.
+     - **Reuse path:** skip session creation (step 5) - no title needed. Still
+       do steps 2-4 and 6-8.
+   - If none exist for it -> continue to step 2.
 2. **Ask the human for the registry name.** NEVER invent or
-   propose-default-then-proceed: the name is the human's decision — ask, wait
-   for the answer, use it verbatim. (Needed early: provisioning, identity
-   message, and the session title all embed it.)
-
-3. **Provision the coordinator agent in the project:**
-   - **No `coordinator.md` in the project** → copy the template at
-     `<this skill's directory>/../../../.placeholder/agent/coordinator.md` to
-     `<project dir>/.opencode/agents/coordinator.md`. The template carries the
-     identity line ("You are registered as this project's `name` in the
-     lobby's `agents.json`") in pointer form — full lobby instructions live
-     in the lobby repo's `AGENTS.md` hub, which the project's own
-     `AGENTS.md` pointer section directs every agent to read.
-   - **`coordinator.md` EXISTS** (the project has its own instructions):
-     - Detection (tolerant, not strict — humans may rename headings): find a
-       section by **heading variant** (`## Agent Lobby`, `## Lobby
-       communication`, etc.) **or** by content mentioning Agents-Lobby /
-       `agents.json` / registered.
-     - **No lobby section found** → append the template's **"## Lobby
-       communication"** section (pointer form: identity, reply-in-session,
-       no-webhook, pointer to the lobby hub `AGENTS.md` + PROTOCOL).
-     - **Section found but content differs from the template** → ALIGN:
-       replace the section content with the template's copy (preserve the
-       human's heading position/formatting; normalize non-standard headings
-       to `## Lobby communication`).
-     - **Section found and aligned** → leave untouched, report.
-     - **PLUS the identity message** (the section copy is name-agnostic) —
-       send the session one message:
-       - new session: `Agent Lobby: your session is registered; your name is <name>.`
-       - reuse path: `Agent Lobby: your session is reused; your name now is <name>.`
-       This is the ONLY permitted first message to the session — authored by
-       the human as part of running this skill.
-   - **`opencode.json`:** missing → create
-     `{ "$schema": "https://opencode.ai/config.json", "default_agent": "coordinator" }`;
-     exists without `default_agent` → add the field, preserving everything
-     else; exists with a **different** `default_agent` → STOP and ask the
-     human; do not change it.
-   - **Project root `AGENTS.md` pointer:** ensure the project's root
-     `AGENTS.md` carries this section EXACTLY, with `<lobby pointer>`
-     replaced by the relative path from the project's directory to the
-     lobby repo root — COMPUTED at registration time (e.g. Node
-     `path.relative(projectDir, lobbyRoot)` or equivalent; never hardcode
-     `..\..\` — that only fits the standard `projects/` layout, since
-     projects may live anywhere the human delegates):
-
-     ```markdown
-     ## Agents-Lobby
-     You are a lobby-managed project. Before any work in this project, read <lobby pointer> (the lobby's instruction hub - general + lobby rules) and follow it.
-     ```
-
-     File missing → create it with just this section. Section present and
-     matching → verified, report. Section present but differing → replace
-     it with the section above (preserve the rest of the file). Section
-     absent → append it. Pointer cannot be ensured (file unwritable,
-     computation fails) → WARN and surface it in the step 6 report.
-
-4. **Create the session:**
-
-   ```sh
-   curl -X POST http://127.0.0.1:28894/api/session \
-     -u "opencode:<password>" \
-     -H "Content-Type: application/json" \
-     -d "{\"title\": \"(<name>)<project name>\", \"location\": {\"directory\": \"<project dir>\"}}"
-   ```
-
-   - **Title format is fixed: `(<name>)<project name>`** — e.g.
-     `(taskflow2)TaskFlow` — using the name from step 2.
-   - `location.directory` binds the session to the project — required.
-   - Optional `agent` field pins an agent at creation (e.g.
-     `"agent": "coordinator"` once provisioned). Omit to use the default.
-   - The response's `data.id` (`ses_...`) is the session ID. Returned
-     immediately; no waiting.
-
-5. **Register:** append to
-   `<lobby repo root>/config/agents.json` (the lobby repo this skill lives in) inside `agents`:
+   propose-default-then-proceed: the name is the human's decision - ask, wait
+   for the answer, use it verbatim. It is the agent's lobby identity and is
+   separate from the agent-file name (`dev` the file, `ruben` the identity).
+3. **Provision the agent file:** `<project dir>/.opencode/agents/<agent-name>.md`
+   from `.placeholder/agent/<agent-name>.md` in the lobby repo.
+   - missing -> copy it verbatim.
+   - exists -> **ask the human which to do**, with the file and what it holds:
+     - **replace** - overwrite it with the template (project-specific content
+       and any `model:` frontmatter are lost);
+     - **merge** - keep every line the project already has, and append only
+       the template's body sections that are missing; a section present with
+       different text is reported, never overwritten. **Frontmatter is never
+       touched**, so a hand-tuned `model:` survives;
+     - **backup** - copy it to `<agent-name>.md.bak-YYYYMMDD-HHmmss` first
+       (no colons: the stamp must be a valid file name), then replace.
+     Never pick one yourself: the file may be hand-tuned, and a hand-tuned
+     `model:` is the only thing model routing trusts.
+4. **Project invariants** - `REQUIRED`: defined once, in
+   `creating-lobby-projects` steps 3-5 (root `AGENTS.md` pointer, `opencode.json`
+   default agent, and the orchestrator file that makes that default resolve).
+   Apply all three exactly as written there, including every stop-and-ask case.
+   Do not re-derive any of them from memory - read those steps, so the text and
+   the values have exactly one home.
+5. **Create the session:** `POST /api/session` with
+   `{"title": "(<name>)<project name>", "location": {"directory": "<project dir>"}, "agent": "<agent-name>"}`
+   - Title format is fixed: `(<name>)<project name>` - e.g. `(ruben)TaskFlow`.
+   - `location.directory` binds the session to the project - required.
+   - `agent` pins the session to the agent file from step 3. Never omit it:
+     the project's `default_agent` is the orchestrator, not this peer.
+   - The response's `data.id` (`ses_...`) is the session ID.
+6. **Register:** in `<lobby repo root>/config/agents.json`, inside `agents` -
+   **update the entry whose `session` matches, append only when there is none**.
+   One session must never appear twice: a duplicate `name` makes that agent's
+   every peer send fail with `409 ambiguous_sender`, and a duplicate session
+   under a new name keeps attributing replies to the old one.
 
    ```json
-   { "name": "<human's name>", "project": "<project name>", "session": "ses_...", "role": "<role>" }
+   { "name": "<human's name>", "project": "<project name>", "session": "ses_...", "role": "<role if the human gave one>" }
    ```
 
-   The server re-reads `agents.json` on every request - no restart needed.
+   Omit `role` when the human did not name one - a role-less agent is inert
+   (cannot send or be addressed). `human`, `boss` and `all` are reserved and
+   rejected; a role must match `^[a-z][a-z0-9_-]*$` (lowercase, digits, `_`,
+   `-`) - an invalid role makes every registry read fail, taking the whole
+   lobby down. The server re-reads `agents.json` on every request - no restart.
+7. **Identity message** - only now, when the session and the registry row both
+   exist. It is the only message you may send to the session (authored by the
+   human as part of running this skill), and it goes through the lobby's
+   `/send` with your own principal token - not through the OpenCode service:
+   - new session: `Agent Lobby: your session is registered; your name is <name>.`
+   - reuse path: `Agent Lobby: your session is reused; your name now is <name>.`
+   - **role-less agent:** `/send` cannot reach it (`403 no_role`). Do not work
+     around it and do not invent a role: pause, report that the agent is
+     unaddressable, and ask the human for a role (PROTOCOL.md, "A refused send
+     stops the task").
 
-6. **Report** to the human: the name, session ID, project directory, the
-   coordinator action taken (copied / appended / aligned / untouched), and the
-   `opencode.json` action taken.
+8. **Report** to whoever delegated the task - the human, or the agent that
+   invoked this skill: name, agent file, session ID, project directory, the
+   file action (added / replaced / backed up + replaced / merged) and the
+   project-invariant actions.
 
 ## Auth
 
 The local OpenCode server requires HTTP Basic auth: username `opencode`,
 password = the `password` field in `~/.config/opencode/service.json`. Read it
 at runtime; never write it to files, logs, or git. Server URL comes from
-`opencode service status` (first line) — it changes on restart.
+`opencode service status` (first line) - it changes on restart.
 
 ## Common Mistakes
 
 | Mistake | Reality |
 |---|---|
-| Inventing the registry name | The name comes from the human, verbatim |
-| Strict heading match on existing coordinators | Detection is tolerant — heading variants or content mention count; non-standard headings get normalized |
-| 401 Unauthorized | Missing or wrong auth header — see Auth above |
-| 404 on `/session/...` | Paths need the `/api` prefix: `/api/session`, not `/session` |
-| Restarting the server after editing `agents.json` | Unnecessary — hot reload per request |
-| Sending any message beyond the registration identity message | Requires the human's explicit approval (lobby rule) |
-| Editing a project's own coordinator content beyond the lobby section | Never — only the lobby section is appended/aligned |
+| Inventing the registry name | Comes from the human, verbatim |
+| One session for a project's several agents | One agent = one session; each pinned to its own file |
+| Omitting `agent` on session creation | The session would open as the project's orchestrator |
+| Choosing replace/merge/backup yourself | Existing file -> ask the human which; a hand-tuned `model:` is the only thing routing trusts |
+| Recomputing the `AGENTS.md` pointer | It is fixed text; see `creating-lobby-projects` |
+| Adding a `role` nobody asked for | Role is policy; a wrong role grants addressing rights |
+| 401 Unauthorized | Missing or wrong auth - see Auth |
+| 404 on `/session/...` | Paths need the `/api` prefix |
+| Restarting the server after editing `agents.json` | Unnecessary - hot reload per request |
+| Sending messages beyond the identity message | Requires the human's explicit approval |
 
 ## When NOT to Use
 
-Registering an existing session the human already created → same as the reuse
-path: skip the dedup question and session creation; still do provisioning
-(step 3, including the identity message) and ask the name (step 2), then
-register (step 5) with the known session ID.
+Registering a session the human already created -> the reuse path: skip the
+dedup question and session creation; still do steps 2-4 and 6-8 with the known
+session ID.

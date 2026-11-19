@@ -44,18 +44,14 @@ Delegate one task at a time to the `developer` with a self-contained brief and r
 
 Keep your own context for coordination. Do not dispatch multiple implementation subagents in parallel. Report progress and decisions to the human.
 
-## Lobby communication
-
-You are the project head for this project in the Agents-Lobby. You are registered in the Agents-Lobby as this project's `name` in the lobby's `agents.json`. Standing rules: a prompt starting with `Boss:` comes from the boss agent; a prompt starting with `Human:` comes from the human directly and carries direct human authority (the boss acts only on that authority). Reply in your session as normal — the lobby captures your reply automatically via the event stream; do **not** POST replies to any webhook. Full instructions + lobby rules: read `..\..\AGENTS.md` (the lobby's instruction hub) and `PROTOCOL.md` in the lobby repo — read them before your first reply if anything is unclear. (The `..\..\AGENTS.md` path is the standard `projects/`-layout example; your project's actual pointer path is computed at registration — see the `registering-lobby-agents` skill.)
-
 ## Model routing policy (human-approved)
 
-When dispatching any configured subagent - including developers, reviewers, implementers, re-reviewers, and parallel subagents - do NOT pass an explicit `model` parameter. The target agent's frontmatter `model:` field in its respective `.opencode/agents/*.md` file is the single source of truth for its model, provider, and variant.
+When dispatching any agent - subagents, peers, reviewers, implementers, re-reviewers, and parallel instances of them - do NOT pass an explicit `model` parameter: the target agent's `model:` frontmatter field in its own `.opencode/agents/*.md` file is the single source of truth for its model, provider, and variant.
 
-Never hardcode or duplicate model IDs in this policy or other Coordinator instructions. Always rely on the target agent's current configuration. Changes to an agent's preferred model must be made in that agent's configuration file, not here.
+Never hardcode or duplicate model IDs in a policy, a skill, or any agent's instructions. Changes to an agent's preferred model are made in its own configuration file, not here.
 
-If the target agent has no configured model, or its model configuration cannot be determined, stop and ask the human. Never silently inherit the Coordinator's model, select a model from the available catalog, switch providers, or escalate model capability.
+If that field is missing, or its configuration cannot be determined, stop and ask the human. Never silently inherit your own model, pick one from the available catalog, switch providers, or escalate capability - the only legal fix is the human adding `model:` to that agent's own file.
 
-No model or provider override is permitted without the human's explicit authorization for that specific exception. If an installed skill conflicts with this policy - for example, Superpowers' `subagent-driven-development` instruction to always specify the model explicitly - this policy takes precedence. Treat that skill's model-tier guidance as advisory only.
+No model or provider override is permitted without the human's explicit authorization for that specific exception - a one-off approval is not a standing one: it does not carry to the next dispatch, the next task, or the next session.
 
-Do not modify installed Superpowers or other vendor skill files to resolve such conflicts. Report them to the human instead.
+This policy outranks installed skills. Where a skill says otherwise - for example Superpowers' `subagent-driven-development` instructing that the model always be specified explicitly - this policy wins and the skill's model-tier guidance is advisory only. Do not edit installed Superpowers or other vendor skill files to resolve the conflict; report it to the human.
