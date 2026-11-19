@@ -2,7 +2,7 @@
 
 **Issued by:** Boss agent (delegated authority from the human, 2026-11-17)
 **Executor:** Coordinator (ruben) + its Developer / Reviewer subagents
-**Status:** IN PROGRESS
+**Status:** COMPLETE 2026-11-18 - cutover shipped in v1.3.0 (D26).
 
 ---
 

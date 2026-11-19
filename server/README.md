@@ -2,7 +2,12 @@
 
 Phase 2 backend foundation (Fastify 5 + TypeScript strict + Drizzle ORM +
 better-sqlite3 + zod + vitest). See `docs/migration/assessment.md` and
-`MIGRATION.md` for the binding context.
+`docs/migration/work-order-2026-11-17.md` for the binding context.
+
+**Status (2026-11-20):** current for the code. The many `bridge.mjs` comparisons
+below are the migration record - the bridge was deleted at cutover (D26), so
+those citations explain parity decisions, not live code. Current stack:
+`docs/tech-stack.md`.
 
 ## Run
 
@@ -22,20 +27,25 @@ Environment variables (all optional — see
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `LOBBY_HOST` | `127.0.0.1` | Bind address (local trusted environment). |
-| `LOBBY_PORT` | `3006` | Dev port; 3005 stays the legacy bridge until cutover. |
+| `LOBBY_PORT` | `3006` | Fresh-clone dev port; the reference deployment runs 3006. |
 | `LOBBY_BODY_LIMIT` | `1048576` | Max request body bytes (1 MB). |
-| `LOBBY_DB_PATH` | `.data/dev.db` | SQLite file (gitignored, auto-created). Relative to cwd. Never points at the canonical db. |
+| `LOBBY_DB_PATH` | `.data/dev.db` | SQLite file (gitignored, auto-created). Relative to cwd. |
 | `LOBBY_OPENCODE_TIMEOUT_MS` | `30000` | Upstream OpenCode timeout (adapter, Phase 3). |
 | `LOBBY_OPENCODE_SERVER_URL` | none | Fallback OpenCode URL; discovery stays inside the Phase 3 adapter. |
-| `LOBBY_REGISTRY_PATH` | `config/agents.json` | Registry file, re-read per request (bridge-faithful). Absent file = empty registry (fresh clone); a present-but-malformed file fails that request (500). |
+| `LOBBY_REGISTRY_PATH` | `config/agents.json` | Registry file, re-read per request. Absent file = empty registry (fresh clone); a present-but-malformed file fails that request (500). |
+| `LOBBY_PEER_ALLOWLIST_PATH` | `config/peer-to-peer-allowlist.json` | Role -> roles policy for peer sends. |
+| `LOBBY_PROJECTS_DIR` | `./projects` | Projects workspace listed by `/api/local-projects`. |
+| `LOBBY_UI_DIR` | `../web/out` next to the server package | Static dashboard export served at `/ui`. |
 
 **Auth:** optional shared-secret bearer token read ONLY from the gitignored
 file `.data/server.auth.json` (`{ "authToken": "..." }`). Absent file = open
-local access, matching today's bridge; a present-but-empty, whitespace-only,
-or malformed file = startup error (fail loud — the operator created the file
-to protect something). When set, `/api/events`, `/send` and `/prompt` require
-the `Authorization: Bearer <token>` header; read routes and `/webhook` stay
-open (the bridge has no auth there either).
+local access; a present-but-empty, whitespace-only,
+or malformed file = startup error (fail loud - the operator created the file
+to protect something). When set, it gates the write paths only - `/send`,
+`/prompt` and `/api/principal`. Read routes, `/webhook` and the SSE stream
+(`/api/events`) stay open: an `EventSource` cannot send an
+`Authorization` header, and a token-gated stream would break dashboard
+reconnects by design (`src/api/routes/events.ts`).
 
 ## API
 

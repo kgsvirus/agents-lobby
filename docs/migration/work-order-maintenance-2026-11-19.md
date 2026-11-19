@@ -4,7 +4,7 @@
 authority. do all excluding 5 (L-O11). after closes move to amnesia" - the
 amnesia move is the Boss's job at integration, not yours).
 **Executor:** Coordinator (ruben) + Developer/Reviewer subagents.
-**Status:** IN PROGRESS
+**Status:** COMPLETE 2026-11-19 - all three tasks shipped; final gate green (see `docs/migration/architecture.md` and the decision log).
 
 ## 0. Assignment exclusivity
 

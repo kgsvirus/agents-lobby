@@ -2,7 +2,7 @@
 
 The reference list for anyone (human or agent) picking up work in this repo.
 Every version below is the declared range; `package.json` files are the source
-of truth, this document is the map. Last verified 2026-11-19.
+of truth, this document is the map. Last verified 2026-11-20.
 
 ## Runtime and workspaces
 
@@ -39,9 +39,8 @@ API/config reference: `server/README.md`.
 | Framework | **Next.js 15** (App Router) |
 | UI runtime | **React 19** |
 | Language | **TypeScript 5.9** |
-| Styling | **Tailwind CSS v4** via `@tailwindcss/postcss` |
-| Components | **shadcn/ui** (style `base-nova`, built on **Base UI**) — `src/components/ui/*`, added with `npx shadcn@latest add <name>`. The shared `Button` is ours (cva + our palette); the registry's Button is NOT used |
 | Styling | **Tailwind CSS v4** via `@tailwindcss/postcss`; semantic tokens in `globals.css` mapped to this dashboard's existing hexes |
+| Components | **shadcn/ui** (style `base-nova`, built on **Base UI**) — `src/components/ui/*`, added with `npx shadcn@latest add <name>`. The shared `Button` is ours (cva + our palette); the registry's Button is NOT used |
 | Icons | **lucide-react 1.x** |
 | Toasts | **sonner** (`<Toaster>` in `app/layout.tsx`) |
 | Delivery | `output: 'export'` → static `web/out`, served by Fastify at `/ui`; `basePath: '/ui'` |
@@ -81,10 +80,10 @@ export is safe).
 
 | Thing | Value |
 |---|---|
-| Test runner | **Vitest 3**, configured at the root: `vitest.config.ts` scopes it to `server/test/**` + `web/test/**` (`*.test.ts` **and** `*.test.tsx`), maps the `@/` alias, and loads `web/test/setup-dom.ts` (jsdom shims for `matchMedia` / `ResizeObserver` that the Base UI primitives touch) |
+| Test runner | **Vitest 3**, configured at the root: `vitest.config.ts` scopes it to `server/test/**` + `web/test/**` (`*.test.ts` **and** `*.test.tsx`), maps the `@/` alias, and loads `web/test/setup-dom.ts` (jsdom shims for `matchMedia`, `ResizeObserver` / `IntersectionObserver` and `scrollTo` / `scrollIntoView` that the Base UI primitives and the chat feed touch) |
 | Web tests | **jsdom 26** + **@testing-library/react 16** / `@testing-library/dom 10`. Logic suites are `.ts`; rendered component tests are `.tsx` with `// @vitest-environment jsdom` and `afterEach(cleanup)` (Vitest has no globals, so Testing Library's auto-cleanup does not register itself) |
-| Gate | `npm test` (currently 46 files / 400 tests) |
-| Onboarding | `node setup.mjs` — prerequisites, registry template, `projects/` |
+| Gate | `npm test` (counts drift every release - trust the run, not this line) |
+| Onboarding | `node setup.mjs` — prerequisites, registry template, local memory, `projects/`, peer allowlist |
 
 ## Machine constraints
 

@@ -18,16 +18,27 @@
 > "Memory governance" section. Removed memory is archived to `amnesia.md`
 > (gitignored, dated, with reason).
 >
-> Last updated: 2026-11-19 (D27 role-based peer policy, D28 wake boundary,
-> D29 policy/credential files not agent-editable; O11 flake noted; D26
-> architectural migration + snapshot sync; governance rules moved to
-> behavior.md).
+> **Status vocabulary (2026-11-20):** `- approved` = the decision stands;
+> `- approved - shipped <sha>` = applied and committed; `- approved -
+> superseded by Dxx` = replaced. Session-level notes ("commit pending",
+> "apply without commit") are not statuses - they were retired because they
+> read as instructions and went stale the moment the work landed.
+>
+> Last updated: 2026-11-20 (v1.4.0 dashboard shipped; D39 corrected - the
+> Projects module is the rebuilt rail / list / flow-board UI, not an iframe;
+> system snapshot refreshed to the shipped shell; status vocabulary defined and
+> the retired "apply without commit" tag replaced by shipped shas; necessity
+> prune archived D02/D08/D09/D10/D14/D19/O10, then D35/D36/D38 on the human's
+> "forget", then O02/O11 on "forget" - the behaviours they described stay
+> documented where they live: README residuals, decision-authority trace
+> caveat, the chat-dedup test comment).
 
 ## System snapshot (universal facts)
 
 - **Architecture:** hub-and-spoke. Boss agent (Agents-Lobby project) <->
   project-head agents, each project keeping its own agents/sessions.
-- **Server** (`server/`, Fastify + TypeScript, port 3005 in production):
+- **Server** (`server/`, Fastify + TypeScript, port from `LOBBY_PORT` - 3005
+  in the reference deployment):
   modular monolith - chat/agents/projects modules, OpenCode integration
   isolated in `integrations/opencode`, SQLite via Drizzle
   (`.data/messages.db`, migrations applied at startup), internal event bus
@@ -42,10 +53,16 @@
   boss (coalesced). No webhook replies. Webchat Boss-row/All-empty compose
   = prompt into the boss session. Agent/project-row compose = direct
   `Human:` send (bypasses boss by design).
-- **Web UI** (`web/`, Next.js + Tailwind + shadcn/ui, static export at
-  `/ui`): sidebar Boss -> All -> projects -> agents; sender-based alignment
-  (Human right, others left) with label above bubble; picker scoped per
-  view; Dark/Light theme (system default, persisted, WCAG AA contrast).
+- **Web UI** (`web/`, Next.js + Tailwind + shadcn/ui on Base UI, static
+  export at `/ui`): a 60px module rail (Chat, Projects, Settings), a 320px
+  list column (Boss, All projects, projects -> agents, with last-message
+  previews and search), a breadcrumb bar, and the chat feed (markdown
+  bubbles, tooltip timestamps). The Projects module lists each project's
+  eight phases and opens one flow board per phase (six statuses, header
+  search, grouped filters, seeded "sample" items until a work-item store
+  exists). Sender-based alignment (Human right, others left); Dark/Light
+  theme (system default, persisted, WCAG AA contrast); a failed API read
+  shows a banner + Retry and keeps the last data loaded.
 - **One server per database:** two lobby instances pointed at the same
   `.data/messages.db` double-capture events and double-wake the boss
   (README "Running").
@@ -60,14 +77,14 @@
 - **Historical:** the pre-v1.3.0 architecture was a zero-dependency bridge
   (`bridge.mjs`) + Vite dashboard - replaced by D26; full record in
   `docs/migration/`.
-- Last updated: 2026-11-18 (D26 + snapshot sync).
 
 ## Decision log (approved)
 
 - **D01** Hub-and-spoke topology; boss is the hub, each project keeps its own
   agents/sessions. - approved
-- **D02** Address-based message log: tagged lines `[from: X] [to: Y]` in
-  `incoming_messages.txt`; single inbox. - approved
+- **D02** -> archived to `amnesia.md` (file-era message log in
+  `incoming_messages.txt`; storage replaced by D23, and the file is now a
+  read-only pre-db archive).
 - **D03** Token economy (mandatory): compact replies (~10 lines, no dumps),
   session-knowledge answers, no re-verification unless asked. Exception:
   project-mandated checks (e.g. Git-is-authoritative) take precedence. - approved
@@ -77,20 +94,19 @@
   (`Boss:`); human explicitly claims sender -> `from: "human"` (`Human:`);
   web UI agent/project-row sends are `Human:`. - approved
 - **D06** Approval gate: never message any agent without explicit human
-  approval, by any channel. - approved (standing rule)
+  approval, by any channel. Operative form (including the registration
+  identity-message exception) is `behavior.md` gate 6; the exception itself is
+  D34(a). - approved (standing rule)
 - **D07** Fan-out via `/send` through OpenCode prompt API (`delivery: queue`,
   non-blocking); no child `opencode run` processes. - approved
-- **D08** Onboarding: `setup.mjs` creates `agents.json` from template
-  (never overwrites), installs the global section idempotently (matches
-  `## Agent Lobby` heading variants; section text = the
-  `.placeholder/agents-md-section.md` source). - approved
-- **D09** `registering-lobby-agents` skill: dedup check -> provision
-  coordinator (copy-if-absent; never overwrite; `opencode.json`
-  `default_agent: coordinator` with conflict-ask) -> registry name from human
-  verbatim -> session title `(<name>)<project>` -> register -> report. - approved
-- **D10** Web UI stack: React + Tailwind + Vite at repo root (no subfolder),
-  component-per-concern, data layer in `src/data/api.ts`; bridge serves
-  `dist/` at `/ui` (base `/ui/`). - approved
+- **D08** -> archived to `amnesia.md` (onboarding + the global AGENTS.md
+  section install; D25 retired the global step, the registry template is
+  `setup.mjs` behaviour covered by the README).
+- **D09** -> archived to `amnesia.md` (registration v1: coordinator template,
+  one session per project; superseded by D19, then D31/D32/D34 and the current
+  skill).
+- **D10** -> archived to `amnesia.md` (Vite dashboard at the repo root, bridge
+  serving `dist/`; superseded by D26's architecture and D39's UI system).
 - **D11** Visibility model: All = everything; Boss view = `[from: boss]` +
   `[to: boss]` only (human->agent direct sends excluded - they bypass the
   boss by design); project/agent views = traffic involving their agents
@@ -114,9 +130,9 @@
   pointers). Boss-facing content does not live in `PROTOCOL.md` (slimmed to
   a reference note), and agent-facing content does not live in `README.md`.
   New docs must declare their audience before being written. - approved
-- **D14** Synthetic echo removed: every path it covered is native now
-  (webchat prompts arrive as prompts; boss sends visible as shell actions;
-  `Human:` sends intentionally boss-invisible). - approved
+- **D14** -> archived to `amnesia.md` (synthetic echo removal: every path it
+  covered is native - webchat prompts arrive as prompts, boss sends are shell
+  actions, `Human:` sends are boss-invisible by design; nothing to re-litigate).
 - **D15** -> archived to `amnesia.md` (routed-copy mechanism, removed by
   human decision).
 - **D16** Boss memory (under `.memory/boss/` in this repo): **`decision-log.md`**
@@ -149,19 +165,9 @@
   `[from: <name>] [to: <last prompter>]` (lastPromptFrom map, updated by
   /send; defaults to boss); boss-session replies log `[to: human]`.
   Historical log lines keep their original tags (append-only). - approved
-- **D19** Registration flow v2 + template identity line (restores D09's name
-  gap): the coordinator template carries the identity line ("You are
-  registered as this project's `name` in the lobby's `agents.json`"); the
-  registering skill handles existing-coordinator projects via tolerant
-  detection (heading variant or content mention) with three cases - append
-  the template's Lobby communication section, align a differing section to
-  the template copy, or leave aligned sections untouched - plus one identity
-  message (name embedded) as the only permitted first message; reuse path
-  includes the reuse/name message. The v2 rewrite had dropped the name line
-  (unlogged then; that gap caused `ruben` to infer its name; its project used
-  its own coordinator.md so no template copy reached it). Identity tell sent
-  to ruben; TaskFlow's existing coordinator.md got the lobby section
-  appended. - approved
+- **D19** -> archived to `amnesia.md` (registration v2 and the template
+  identity line; its live parts - name verbatim, identity message only after
+  the row exists - are now D34 and the `registering-lobby-agents` skill).
 - **D22** Boss agent definition (extends D13a): the boss is a defined agent
   - `.opencode/agents/boss.md` (frontmatter: description, mode, model pin
   glm-5.3-flash, permissions mirroring build's with browser denied). Boss
@@ -170,7 +176,8 @@
   The human switches sessions to the Boss agent manually. (AGENTS.md:
   retired, later reinstated project-facts-only per D24.) - approved
 - **D23** Message database (implements O01): replace the append-only text log
-  with SQLite (`node:sqlite`, zero deps) at `.data/messages.db` (gitignored);
+  with SQLite (`node:sqlite`, zero deps - the driver and schema layer were
+  replaced by D26: better-sqlite3 + Drizzle) at `.data/messages.db` (gitignored);
   schema `messages(id, ts, from, to, body, session_id)` + `bookmarks(consumer,
   last_seen_id)`. Bridge writes every captured event; `incoming_messages.txt`
   retires as read-only pre-db archive; **clean start** (db begins empty,
@@ -252,7 +259,7 @@
   tokens are unchanged; an invalid `Authorization` never falls back to the
   cookie. The shared-token paste stays as the only browser path in that mode.
   Disconnect signs out the tab's UI; the cookie itself is browser-wide.
-  - approved (design + implementation; commit pending the human)
+  - approved (shipped)
 
 - **D31** One orchestrator per project, two templates by purpose - **do not
   delete `coordinator.md`**: `.placeholder/agent/scrum-master.md` is what new
@@ -265,7 +272,7 @@
   projects keep their own `coordinator.md` copies and new projects get
   scrum-master. The **role** `coordinator` in `agents.json` / the peer
   allowlist is policy, unrelated to either file. (Absorbs the former D33;
-  archived in `amnesia.md`.) - approved (apply without commit)
+  archived in `amnesia.md`.) - approved - shipped 6b3c8e3
 
 - **D32** Model routing lives in the orchestrator templates only:
   `scrum-master.md` and `coordinator.md` carry the full policy inline,
@@ -274,7 +281,7 @@
   unchanged (no explicit `model` on dispatch, the target's own frontmatter is
   the source of truth, no hardcoded IDs, no configured model -> stop and ask, no
   override without explicit human authorization, this policy outranks installed
-  skills). - approved (apply without commit)
+  skills). - approved - shipped 6b3c8e3
 
 - **D34** Registration contract: (a) order is session creation, then the
   `agents.json` row, then the identity message - a message cannot be sent before
@@ -287,73 +294,43 @@
   `default_agent` always names a file that exists; (d) an existing agent file
   is never overwritten silently - the human chooses **replace / merge /
   backup** (merge keeps existing lines and frontmatter, adds only missing body
-  sections; backup = `.bak-YYYYMMDD-HHmmss` then replace). - approved (apply
-  without commit)
+  sections; backup = `.bak-YYYYMMDD-HHmmss` then replace). - approved -
+  shipped 6b3c8e3
 
-- **D35** The lobby hub is the global instruction set. From 2026-11-19 all
-  projects are worked on inside Agents-Lobby (human's standing rule; stated in
-  an earlier session and restated now), so the machine-global
-  `~/.config/opencode/AGENTS.md` was retired - renamed `AGENTS.md.bak` - because
-  its sections 1-10 are duplicated verbatim in this repo's `AGENTS.md`, which
-  every managed project's root pointer reaches. One source: project pointer ->
-  hub `AGENTS.md` -> `PROTOCOL.md` for lobby rules. Consequence: a session
-  running outside Agents-Lobby now gets no global instructions - intended.
-  - approved (human; apply without commit)
+- **D35** -> archived to `amnesia.md` (lobby hub = the global instruction set;
+  the hub `AGENTS.md` is the artifact, the machine fact is local-context L-O13).
 
-- **D36** Icons are **lucide-react** (v1, `web` workspace). Icons are imported
-  per name (`import { Settings } from 'lucide-react'`) so tree-shaking ships
-  only what is used; dynamic string lookup is not a thing here. v1 sets
-  `aria-hidden` on icons by default, so an icon-only control supplies its own
-  `aria-label`, and v1 has no brand icons. Global size/colour/stroke defaults
-  would be set with `<LucideProvider>`. - approved (apply without commit)
+- **D36** -> archived to `amnesia.md` (lucide-react v1 icon rules; carried by
+  `docs/tech-stack.md` "Icons" and the README icons paragraph).
 
 - **D37** The tech stack is documented in ONE reference -
   `docs/tech-stack.md` (versions, layer rules, machine constraints) - plus a
   summary table in `README.md` under "Tech stack", so a new session or a
   delegated task can read the stack without asking. `docs/migration/architecture.md`
   points at it rather than repeating it. Kept in sync by editing the reference,
-  not the copies. - approved (apply without commit)
+  not the copies. - approved - shipped 9866577
 
-- **D38** Moving the lobby repo is its own procedure:
-  `.opencode/skills/moving-the-lobby/SKILL.md`. Shared mechanics (phases,
-  worktrees, `safe.directory`, path sweep, lock ladder) stay defined once in
-  `moving-projects-into-lobby` and are referenced, not copied. The skill adds
-  what a project move does not need: destination must be NTFS (exFAT breaks
-  `readlink`, symlinks and workspace linking), copy != move (keep the source
-  until verified), per-repo sweep including every project, rewrite the OpenCode
-  worktree `gitdir:` lines, re-bind sessions with **boss last**, and verify with
-  `npm test` + `npm run build -w web` + `/ui` before deleting the old tree.
-  - approved (apply without commit)
+- **D38** -> archived to `amnesia.md` (moving the lobby repo is its own
+  procedure; the `moving-the-lobby` skill is the procedure).
 
 - **D39** The dashboard's UI system is **shadcn/ui** (`base-nova` style, Base UI
   primitives), with its design tokens mapped to this dashboard's existing
-  palette in `web/src/app/globals.css` — adopting components is a refactor, not
+  palette in `web/src/app/globals.css` - adopting components is a refactor, not
   a restyle. The shell uses the shadcn Sidebar (collapsible to icons, off-canvas
   on small screens), header breadcrumb, and a settings DropdownMenu with a
   Connection Dialog. The chat module uses Avatar/Tooltip/Separator/Skeleton,
   Popover+Checkbox for recipients, and sonner toasts. Kept from the old stack:
-  our own `Button` and `components/ui/utils` helper — the registry overwrites
+  our own `Button` and `components/ui/utils` helper - the registry overwrites
   both and pulls `cn`/`next-themes`/Geist, which this app does not use.
   `ScrollArea` was tried and dropped: ChatFeed's scroll anchoring is bound to
-  the scroll container element. The Projects module keeps its iframe mockup
-  (human decision). - approved (apply without commit)
+  the scroll container element. **Corrected 2026-11-20:** the Projects module
+  is NOT an iframe - it was rebuilt to the approved mockups (project list with
+  the eight phases, one flow board per phase); the approved HTML mockups stay
+  in `.superpowers/mockups/` as reference only (gitignored). - approved -
+  shipped 9e15d3d
 
 ## Open items (system-level)
 
-- **O02** Listener does NOT capture agent-session user inbox items (desktop
-  typing into agent sessions is invisible in the log; only their replies are
-  captured). Accepted v1 gap; extension = zero-token fix if wanted.
-- **O08** Agent-to-agent direct messaging - **DELIVERED**, not out of scope:
-  peer `/send` with role-based addressing, the allowlist policy, and the wake
-  boundary (D22, D27, D28; rules in `PROTOCOL.md`). Kept here only as the record
-  of the original v1 boundary; nothing is pending on it.
-- **O10** Per-project memory separation (human idea): split machine memories
-  into per-project files as deployments grow. Noted; not called for yet.
-- **O11** `server/test/chat-dedup.test.ts` "busy retries YIELD the event loop"
-  is load-flaky: it asserts a wall-clock timer-tick floor (>=3 ticks in ~1.4 s)
-  and fails in roughly half of full-suite runs while passing in isolation. The
-  behaviour it guards (async yield instead of a synchronous park) is real and
-  covered by the design; the test's timing dependency is the defect. Fix by
-  removing the wall-clock dependency (fake clock or deterministic tick
-  accounting), never by lowering the floor. Noted 2026-11-19 from the ruben
-  review; the maintenance-ledger original was deleted with its workspace.
+None open. O02 and O11 were archived to `amnesia.md` on the human's "forget"
+(2026-11-20); the behaviours they described stay documented in the README
+residuals, `decision-authority.md` and the `chat-dedup` test comment.

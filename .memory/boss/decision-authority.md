@@ -37,5 +37,5 @@ reference machine-specific projects, so they are not published here.
 
 Trace caveat: rulings made in response to instructions the human typed
 directly into an agent's session trace only partially - agent-session input
-is not captured by the event listener (known v1 gap, O02 in the decision
-log); the ledger records the ruling, not the original instruction.
+is not captured by the event listener (known v1 gap); the ledger records the
+ruling, not the original instruction.

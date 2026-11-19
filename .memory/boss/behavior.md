@@ -31,7 +31,10 @@
    equivalently explicit commit instruction) in the human's latest
    instruction. **"Approve" applies the change but never commits it** -
    the human reviews, then says "commit" separately. Momentum never
-   carries a commit.
+   carries a commit. The decision log records what shipped (`- approved -
+   shipped <sha>`), never a session's commit state - the old
+   "apply without commit" tag is retired (2026-11-20) because it read as an
+   instruction and went stale once the work landed.
 5. **Commit batching** - when the human says "commit" and the pending
    changes span multiple scopes (feat / fix / docs / chore), split them
    into separate commits: one per scope, each with its own
@@ -95,12 +98,12 @@ at the top of this file.)
 ## Memory governance
 
 - **Dedup rule** - if a would-be new decision duplicates an existing entry (same substance), do NOT create a duplicate - ask the human whether to update the existing entry, remove the new one, or change nothing. Only truly new decisions get new entries.
-- **Memory-maintenance rule** - whenever memory is updated, always cross-check the other memory files (decision-log / local-context / behavior / decision-authority) for redundancy, content that can carry (move to its proper home), and alignment drift - including form: a rule set should read as one system (parallel labels, consistent structure), not seven individual drafts. Proactively, without being asked. Flag anything found in the update report. Removed decisions are archived to mnesia.md (gitignored), not deleted.
-- **Classification rule** - when adding or moving memory content, verify whether it is **universal** (public -> decision-log.md, decision-authority.md, ehavior.md - committed) or **machine-specific** (personal -> local-context.md - gitignored). Machine-specific content never enters committed files; universal content never hides in personal ones. When unsure, ask the human.
+- **Memory-maintenance rule** - whenever memory is updated, always cross-check the other memory files (decision-log / local-context / behavior / decision-authority) for redundancy, content that can carry (move to its proper home), and alignment drift - including form: a rule set should read as one system (parallel labels, consistent structure), not seven individual drafts. Proactively, without being asked. Flag anything found in the update report. Removed decisions are archived to amnesia.md (gitignored), not deleted.
+- **Classification rule** - when adding or moving memory content, verify whether it is **universal** (public -> decision-log.md, decision-authority.md, behavior.md - committed) or **machine-specific** (personal -> local-context.md - gitignored). Machine-specific content never enters committed files; universal content never hides in personal ones. When unsure, ask the human.
 - **Docs-sync rule** - when making changes to memory, features, protocol, instructions, or behavior, always check README.md (human) and PROTOCOL.md (agents) - and the boss AGENTS.md - for content that needs updating or alignment per D13a. Proactively, without being asked; flag anything found in the update report.
 - **Circularity rule** - when checking memory (and instructions), also look for circular instructions/rules - rules that reference each other in a loop, exist only to serve each other, or whose revision would invalidate one another. Flag such loops to the human with a proposed cut (which rule to revise or remove). Healthy pointer chains are fine: each hop must carry unique substance and the chain must terminate on real content. The purpose is unambiguous instruction-following: any agent (or the boss) hitting these rules must never have to guess which instruction wins.
 - **Necessity rule** - when checking memory, also ask of each entry: would the project still progress without this knowledge? If yes, the entry is history, not substance - propose trimming it to its protective minimum (the part that guards against re-litigating a settled decision) or removing it. Records whose only job is (why we do not do X again) survive in one line, not a narrative.
-- **Memory-change consent rule** - removing memory (moving it to mnesia.md) always asks the human first - removal is never autonomous. Substantive memory changes (new rules, revised rules, new decisions) are drafted in chat and applied only on approval. The exception is mechanical status-sync - marking items closed after the human instruction, syncing wording to already-approved decisions - which is applied proactively per the memory-maintenance rule and reported in the update.
+- **Memory-change consent rule** - removing memory (moving it to amnesia.md) always asks the human first - removal is never autonomous. Substantive memory changes (new rules, revised rules, new decisions) are drafted in chat and applied only on approval. The exception is mechanical status-sync - marking items closed after the human instruction, syncing wording to already-approved decisions - which is applied proactively per the memory-maintenance rule and reported in the update.
 
 ## Writing conventions
 

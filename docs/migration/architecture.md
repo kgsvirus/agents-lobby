@@ -1,10 +1,16 @@
 # Agents-Lobby — Final Architecture (post-migration record)
 
+> **Status (2026-11-20): superseded record.** The cutover completed in v1.3.0
+> (D26) - the legacy bridge is deleted, `server/` + `web/` are canonical, and
+> the "Strangler position" paragraph below describes the pre-cutover snapshot.
+> Keep this file as the Phase 7A record; the current stack is
+> `docs/tech-stack.md`.
+
 **Date:** 2026-11-17 · **Status:** Phase 7A record of the implemented system in this
 worktree (branch `feat/migration`, working-tree changes). Every claim cites a real
 path/file in this worktree; items not verifiable from source are labeled.
 Companion documents: `docs/migration/assessment.md` (pre-migration analysis,
-including the legacy behavior citations), `MIGRATION.md` (work order),
+including the legacy behavior citations), `docs/migration/work-order-2026-11-17.md` (work order),
 `server/README.md` (operator-facing API/config reference), `docs/tech-stack.md`
 (the stack reference: versions, layer rules, machine constraints).
 
@@ -93,7 +99,7 @@ live in `infrastructure/` / `presentation/` / `api/`. Routes are validation +
 delegation only (checked per-file: e.g. `server/src/modules/chat/presentation/routes.ts`).
 
 **Recorded deviation — `modules/activity` intentionally NOT materialized** (vs
-MIGRATION.md §3's reference layout, Phase 7A review ruling): the work order's
+docs/migration/work-order-2026-11-17.md §3's reference layout, Phase 7A review ruling): the work order's
 layout is "reference, adapt — no empty folders, no speculative layers", and no
 current use case exists for an activity-feed domain — the only activity-like
 need today is last-activity stamps (served by the chat module's repository) and
@@ -112,7 +118,7 @@ activity queries).
 | Message rows, views (`all\|boss\|agent:<name>\|project:<name>`), pagination/`hasMore`, bookmarks/unread, wake-slice row filter, HTTP query arithmetic | `modules/chat/domain/` (pure) + `modules/chat/infrastructure/message-repository.ts` (verbatim `store.mjs` SQL, alias `ts AS time, sender AS "from", receiver AS "to", body AS text`) |
 | Capture policy (boss-only filter, wake-echo suppression of the enqueued wake text; boss `text.ended` replies capture UNCONDITIONALLY — Boss ruling 2026-11-19, option (d): the reply to a wake is the relay the human reads), reply routing via in-memory `lastPromptFrom` (`"boss"` fallback), `/send` fan-out, `/prompt`, wake orchestration (single-flight: each attempt queues behind the in-flight one and re-checks after it completes; then coalesce → slice → prompt → bookmark-through-slice) | `modules/chat/application/chat-service.ts` — all OpenCode-free: it compares domain names and its own outbox text |
 | Insert-dedup guard (EVENT CAPTURES ONLY — the OpenCode-listener path; explicit /send + /webhook inserts are never deduped): a capture insert whose sender + receiver (null-safe) + body matches a row whose `ts` is within 100 ms of the incoming capture `ts` is skipped + logged at the repository's `insert()`; a skipped duplicate returns the existing row with `inserted:false` and publishes NO `message.created`; holds across connections via the ingest transaction's `BEGIN IMMEDIATE` + busy_timeout | `modules/chat/infrastructure/message-repository.ts` |
-| Registry (`agents.json`) read: per-request (`read()`) and per-event-line (`loadSync()`) re-reads, no db writes | `infrastructure/registry/reader.ts`; chat and agents consume the reader through their own ports (no cross-module import). The FILE stays the runtime source of truth (MIGRATION.md decision 3) |
+| Registry (`agents.json`) read: per-request (`read()`) and per-event-line (`loadSync()`) re-reads, no db writes | `infrastructure/registry/reader.ts`; chat and agents consume the reader through their own ports (no cross-module import). The FILE stays the runtime source of truth (docs/migration/work-order-2026-11-17.md decision 3) |
 | Agents mirror (`agents` + `projects` tables, `ordinal` file order, rowid-keyed → duplicates preserved) | `modules/agents/` — startup sync + per-request refresh; serves `GET /api/agents` |
 | Local projects listing | `modules/projects/` — filesystem readdir, ENOENT → `[]` |
 | OpenCode protocol (SSE `/api/event`, inbox, prompt, discovery, auth, wake-text format) | `integrations/opencode/` ONLY — nothing else imports OpenCode shapes |
