@@ -246,13 +246,19 @@ of going through the Boss relay.
   `/send` derives the sender from the token and rejects a body `from` that
   disagrees (403); with it absent the legacy open `from`-body mode stays in
   force.
-- **Dashboard:** ⚙ Settings has a Human token field with Connect / Disconnect.
-  The token is validated with `GET /api/principal` and kept in
-  `sessionStorage` (cleared when the browser session ends; readable by
-  same-origin JavaScript, so it is not XSS-proof).
+- **Dashboard:** with identities configured (`.data/peer-auth.json`), Settings
+  auto-connects this browser as `human` - no paste: the server mints a loopback
+  `HttpOnly; SameSite=Strict` session cookie (`POST /api/connect`), and
+  Disconnect is sticky for the tab. In shared-token mode (`server.auth.json`
+  only) the token field stays, because that is the only browser path there. In
+  open mode there is nothing to connect. `GET /api/auth-mode` tells the UI which
+  of the three it is. Disconnect signs out this tab's UI; the session cookie is
+  browser-wide, so another tab of the same browser can re-establish it.
 - **Trust boundary:** agents run as the same OS user on this machine, so a
   deliberately malicious agent could read another agent's token. These tokens
-  bind identity and give an audit trail; they are not isolation. The allowlist
+  bind identity and give an audit trail; they are not isolation. The same
+  applies to the browser session: it is "loopback = human" for this OS user,
+  not a sandbox, and a multi-user machine would broaden it. The allowlist
   governs lobby traffic only: any session that can reach the OpenCode API can
   prompt another session directly, bypassing this policy. Use TLS and separate
   OS users/containers if the lobby is ever exposed or shared.

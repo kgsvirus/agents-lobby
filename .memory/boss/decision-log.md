@@ -243,6 +243,17 @@
   privilege escalation. Standing rule in `PROTOCOL.md` ("Policy and
   credentials are not yours to edit"). - approved
 
+- **D30** The dashboard connects itself: in identity mode the server mints an
+  `HttpOnly; SameSite=Strict` session cookie for the `human` principal on
+  `POST /api/connect`, so nobody pastes a token. Guards: identity mode only
+  (refused in open/shared-token), loopback bind + loopback peer, no proxy
+  headers (`x-forwarded-for`/`forwarded`/`x-real-ip`), loopback `Host` name, and
+  an `x-lobby-connect` header a cross-site form cannot send. Agent bearer
+  tokens are unchanged; an invalid `Authorization` never falls back to the
+  cookie. The shared-token paste stays as the only browser path in that mode.
+  Disconnect signs out the tab's UI; the cookie itself is browser-wide.
+  - approved (design + implementation; commit pending the human)
+
 ## Open items (system-level)
 
 - **O02** Listener does NOT capture agent-session user inbox items (desktop
