@@ -1,5 +1,6 @@
 import type { Message } from '../lib/api';
 import { bubbleMeta } from '../lib/api';
+import { Markdown } from './Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 // Alignment is fixed by sender identity (see bubbleMeta in lib/api.ts):
@@ -23,20 +24,18 @@ export function MessageBubble({
   return (
     <div
       data-id={m.id}
-      className={`mb-2.5 flex w-fit max-w-[70%] flex-col ${right ? 'ml-auto items-end' : 'mr-auto items-start'}`}
+      className={`mb-3 flex w-fit max-w-[78%] flex-col ${right ? 'ml-auto items-end' : 'mr-auto items-start'}`}
     >
       <div className="mb-0.5 flex items-center gap-1.5">
         <Tooltip>
-          <TooltipTrigger
-            render={<span className={`cursor-default text-[10px] ${metaTone}`} />}
-          >
+          <TooltipTrigger render={<span className={`cursor-default text-[10px] ${metaTone}`} />}>
             {meta}
           </TooltipTrigger>
           <TooltipContent>{new Date(m.time).toLocaleString()}</TooltipContent>
         </Tooltip>
       </div>
       <div
-        className={`w-fit whitespace-pre-wrap break-words rounded-xl px-2.5 py-1.5 text-[15px] ${
+        className={`w-fit max-w-full whitespace-normal break-words rounded-xl px-3 py-2 text-[13.5px] leading-relaxed ${
           right ? 'rounded-tr-sm' : 'rounded-tl-sm'
         } ${
           kind === 'boss'
@@ -46,7 +45,7 @@ export function MessageBubble({
               : 'bg-gray-100 text-gray-900 dark:bg-[#2a2a2a] dark:text-gray-200'
         }`}
       >
-        {m.text}
+        <Markdown text={m.text} />
       </div>
     </div>
   );
