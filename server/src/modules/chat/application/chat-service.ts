@@ -188,8 +188,8 @@ export class ChatService {
       if (event.to !== BOSS) {
         this.#clearArmed(event.sessionId);
         // Agent session input: attribute the NEXT captured reply to the sender
-        // the lobby composed into the prefix. O02: typing straight into a
-        // desktop session emits no event at all, so it cannot set this.
+        // the lobby composed into the prefix. Typing straight into a desktop
+        // session emits no event at all, so it cannot set this.
         const sender = parsePromptSender(event.body);
         if (sender !== null) {
           this.#pendingReplyTo.set(event.to, sender.kind === 'peer' ? sender.name : sender.kind);

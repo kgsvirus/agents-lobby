@@ -446,6 +446,10 @@ setTimeout(() => {
       // implementation ZERO timer callbacks run during the contention. Yielding
       // retries let the interval fire at every nap (typically 4-8 ticks for the
       // ~1.4 s ingest; >= 3 is the "timers really ran" floor).
+      // Known flake under parallel load: this asserts a wall-clock floor. Fix by
+      // removing the time dependency (fake clock or deterministic tick
+      // accounting), never by lowering the floor - the behaviour it guards is
+      // an async yield, not a tick count.
       expect(ticks.length).toBeGreaterThanOrEqual(3);
       expect(readRows(new ChatMessageRepository(b.sqlite)).map((r) => r.text)).toEqual(['yielding retry']);
       expect(errSpy).not.toHaveBeenCalled(); // no CAPTURE LOST
