@@ -2,8 +2,14 @@
 incoming_messages.txt
 .data/
 
-# Local registry (contains session IDs; use agents.example.json as template)
-agents.json
+# Local registry (contains session IDs; use config/agents.example.json as template)
+config/agents.json
+
+# Machine-specific peer allowlist (names this machine's agents; example committed)
+config/peer-to-peer-allowlist.json
+
+# Principal tokens for peer messaging (never committed)
+.data/peer-auth.json
 
 # Machine-specific boss memory (seeded from local-context.example.md)
 .memory/boss/local-context.md

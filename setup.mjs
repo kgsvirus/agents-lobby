@@ -1,12 +1,15 @@
-﻿
+
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const REGISTRY = './agents.json';
-const TEMPLATE = './agents.example.json';
+const REGISTRY = './config/agents.json';
+const TEMPLATE = './config/agents.example.json';
+const PEER_ALLOWLIST = './config/peer-to-peer-allowlist.json';
+const PEER_ALLOWLIST_EXAMPLE = './config/peer-to-peer-allowlist.example.json';
+const PEER_AUTH = './.data/peer-auth.json';
 const LOCAL_CONTEXT_DIR = './.memory/boss';
 const LOCAL_CONTEXT = path.join(LOCAL_CONTEXT_DIR, 'local-context.md');
 const LOCAL_CONTEXT_EXAMPLE = path.join(LOCAL_CONTEXT_DIR, 'local-context.example.md');
@@ -41,7 +44,7 @@ const oc = spawnSync('opencode', ['--version'], { encoding: 'utf8', shell: true 
 const ocOk = oc.status === 0 && (oc.stdout || '').trim().length > 0;
 check('opencode CLI on PATH', ocOk, ocOk ? (oc.stdout || '').trim().split(/\r?\n/)[0] : 'not found - install from https://opencode.ai');
 
-// 2. agents.json from template (never overwrite)
+// 2. config/agents.json from template (never overwrite)
 try {
   await fs.access(REGISTRY);
   existingInstall = true;
@@ -71,8 +74,27 @@ try {
   report.push('DONE created ./projects (gitignored - place project workspaces here)');
 }
 
+// 2d. Peer-to-peer allowlist from the committed example (never overwrite;
+// non-secret policy, but the names are this machine's agents -> gitignored)
+try {
+  await fs.access(PEER_ALLOWLIST);
+  report.push(`OK   ${PEER_ALLOWLIST} exists, left untouched`);
+} catch {
+  await fs.mkdir(path.dirname(PEER_ALLOWLIST), { recursive: true });
+  await fs.copyFile(PEER_ALLOWLIST_EXAMPLE, PEER_ALLOWLIST);
+  report.push(`DONE created ${PEER_ALLOWLIST} from ${PEER_ALLOWLIST_EXAMPLE} - edit the role -> roles policy`);
+}
+
+// 2e. Principal tokens for peer messaging: NEVER generated here (a token the
+// operator did not choose is a secret in a log line waiting to happen).
+if (fsSync.existsSync(PEER_AUTH)) {
+  report.push(`OK   ${PEER_AUTH} exists (principal tokens, gitignored)`);
+} else {
+  report.push(`NOTE no ${PEER_AUTH} - peer sends stay closed until you create it: {"tokens": {"<token>": {"name": "ruben", "kind": "agent"}}}`);
+}
+
 // 3. Install checks (existing installs) - READ-ONLY: this script never
-// touches your agents.json, your database, or any runtime state; it only
+// touches your config/agents.json, your database, or any runtime state; it only
 // reports what the post-migration architecture needs. Shared by plain mode
 // and --fix (identical lines, single source).
 async function runChecks() {
@@ -114,7 +136,7 @@ async function runChecks() {
   try {
     const reg = JSON.parse(await fs.readFile(REGISTRY, 'utf8'));
     const count = Array.isArray(reg.agents) ? reg.agents.length : 0;
-    lines.push(`OK   agents.json parses - ${count} agent entr${count === 1 ? 'y' : 'ies'} registered (your config is never modified by setup)`);
+    lines.push(`OK   config/agents.json parses - ${count} agent entr${count === 1 ? 'y' : 'ies'} registered (your config is never modified by setup)`);
   } catch {
     lines.push(`WARN ${REGISTRY} is not valid JSON - check it manually; setup never edits your registry file`);
   }
@@ -187,7 +209,7 @@ if (FIX) {
   // Final human step - fresh-clone-aware: a fresh clone must edit its
   // registry before starting (plain mode's guidance, not silently skipped).
   if (!existingInstall) {
-    console.log('\nNext: edit agents.json - replace the template session IDs with real ones (see agents.example.json).');
+    console.log('\nNext: edit config/agents.json - replace the template session IDs with real ones (see config/agents.example.json).');
   }
   console.log('Then start the server (README "Running"):');
   console.log("  $env:LOBBY_PORT='3005'; $env:LOBBY_DB_PATH='.data/messages.db'");
@@ -198,7 +220,7 @@ if (FIX) {
 if (existingInstall) {
   const upgrade = await runChecks();
   if (upgrade.length) {
-    console.log('\n--- Install checks (existing agents.json - upgrade guidance) ---');
+    console.log('\n--- Install checks (existing config/agents.json - upgrade guidance) ---');
     for (const line of upgrade) console.log(line);
   }
 }
@@ -208,8 +230,8 @@ Next steps:
 ${existingInstall
     ? `  1. Apply any TODO lines above (npm install / npm run build -w web).
   2. Start the server (see README "Running"):  npx tsx server/src/server.ts`
-    : `  1. Edit agents.json: replace the template session IDs with real ones
-     (name, project, session - see agents.example.json for the shape).
+    : `  1. Edit config/agents.json: replace the template session IDs with real ones
+     (name, project, session - see config/agents.example.json for the shape).
   2. Start the server (see README "Running"):  npx tsx server/src/server.ts`}
 Protocol details: README.md, section "For project-head agents".`);
 process.exit(failed ? 1 : 0);

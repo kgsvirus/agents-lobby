@@ -1,0 +1,19 @@
+{
+  "human": [
+    "boss",
+    "coordinator",
+    "developer"
+  ],
+  "boss": [
+    "human",
+    "coordinator"
+  ],
+  "coordinator": [
+    "human",
+    "boss"
+  ],
+  "developer": [
+    "human",
+    "coordinator"
+  ]
+}
