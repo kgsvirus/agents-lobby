@@ -1,3 +1,5 @@
+import { Folder, LayoutGrid } from 'lucide-react';
+
 interface Props {
   projects: string[];
   selected: string | null;
@@ -19,8 +21,9 @@ export function ProjectsSidebar({ projects, selected, onSelect }: Props) {
       <button
         onClick={() => onSelect(null)}
         aria-current={selected === null || undefined}
-        className={`row w-full cursor-pointer rounded-md px-2 py-1.5 text-left ${active(null)}`}
+        className={`row flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left ${active(null)}`}
       >
+        <LayoutGrid size={14} className="shrink-0 text-gray-600 dark:text-gray-400" />
         <b>ALL</b>
       </button>
       {projects.map((name) => (
@@ -28,8 +31,9 @@ export function ProjectsSidebar({ projects, selected, onSelect }: Props) {
           key={name}
           onClick={() => onSelect(name)}
           aria-current={selected === name || undefined}
-          className={`row w-full cursor-pointer rounded-md px-2 py-1.5 text-left ${active(name)}`}
+          className={`row flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left ${active(name)}`}
         >
+          <Folder size={14} className="shrink-0 text-gray-600 dark:text-gray-400" />
           {name}
         </button>
       ))}

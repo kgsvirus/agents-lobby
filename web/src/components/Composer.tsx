@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, Send } from 'lucide-react';
 import {
   Agent,
   ApiError,
@@ -26,6 +27,16 @@ export function Composer({ agents, view, onSent }: Props) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const pickerRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes the recipient picker, like the settings menu in TopNav.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const toggle = () => {
     if (!open && pickerRef.current) {
@@ -99,11 +110,13 @@ export function Composer({ agents, view, onSent }: Props) {
             variant="ghost"
             onClick={toggle}
             disabled={bossMode}
-            className={`rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[inherit] text-gray-900 hover:bg-white dark:border-gray-700 dark:bg-[#222] dark:text-gray-200 dark:hover:bg-[#222] ${
+            aria-haspopup="menu"
+            aria-expanded={open}
+            className={`gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[inherit] text-gray-900 hover:bg-white dark:border-gray-700 dark:bg-[#222] dark:text-gray-200 dark:hover:bg-[#222] ${
               bossMode ? 'cursor-not-allowed opacity-50' : ''
             }`}
           >
-            To: {label} ▾
+            To: {label} <ChevronDown size={14} className="shrink-0" />
           </Button>
           {open && pos && (
             <>
@@ -148,7 +161,7 @@ export function Composer({ agents, view, onSent }: Props) {
               canSend ? '' : 'cursor-not-allowed opacity-50'
             }`}
           >
-            Send
+            <Send size={14} className="shrink-0" /> Send
           </Button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { LoaderCircle } from 'lucide-react';
 import type { Message } from '../lib/api';
 import { MessageBubble } from './MessageBubble';
 
@@ -166,14 +167,20 @@ export function ChatFeed({
     >
       <div className="mb-1 flex justify-center text-[10px] text-gray-500 dark:text-gray-400">
         {loadingOlder ? (
-          <span className="animate-pulse">⟳ loading earlier messages…</span>
+          <span className="inline-flex items-center gap-1">
+            <LoaderCircle size={12} className="animate-spin" /> loading earlier messages…
+          </span>
         ) : msgs.length > 0 && !hasMore ? (
           <span>— beginning of conversation —</span>
         ) : null}
       </div>
       {msgs.length === 0 ? (
-        <div className="m-auto text-gray-600 dark:text-gray-400">
-          {ready ? 'No messages for this view yet.' : '⟳ loading…'}
+        <div className="m-auto flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          {ready ? 'No messages for this view yet.' : (
+            <>
+              <LoaderCircle size={14} className="animate-spin" /> loading…
+            </>
+          )}
         </div>
       ) : (
         msgs.map((m) => <MessageBubble key={m.id} m={m} directional={directional} />)

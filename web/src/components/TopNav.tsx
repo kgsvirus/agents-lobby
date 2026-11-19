@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Building2,
+  FolderKanban,
+  MessageSquare,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
+import {
   ApiError,
   connectBrowser,
   disconnectBrowser,
@@ -15,10 +22,10 @@ import { Button } from './ui/button';
 
 export type Module = 'chat' | 'projects' | 'office';
 
-const MODULES: { id: Module; label: string }[] = [
-  { id: 'chat', label: 'Chat room' },
-  { id: 'projects', label: 'Projects' },
-  { id: 'office', label: 'Office' },
+const MODULES: { id: Module; label: string; Icon: LucideIcon }[] = [
+  { id: 'chat', label: 'Chat room', Icon: MessageSquare },
+  { id: 'projects', label: 'Projects', Icon: FolderKanban },
+  { id: 'office', label: 'Office', Icon: Building2 },
 ];
 
 export function TopNav({
@@ -104,14 +111,21 @@ export function TopNav({
     }
   };
 
-  // Close on outside click (the icon re-click closes via its own handler).
+  // Close on outside click (the icon re-click closes via its own handler) or Escape.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
       if (!menuRef.current?.parentElement?.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   return (
@@ -128,12 +142,13 @@ export function TopNav({
           size="sm"
           onClick={() => onModule(m.id)}
           aria-current={module === m.id ? 'page' : undefined}
-          className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+          className={`items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
             module === m.id
               ? 'bg-blue-700 text-white dark:bg-blue-600'
               : 'text-gray-900 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700'
           }`}
         >
+          <m.Icon size={14} className="shrink-0" />
           {m.label}
         </Button>
       ))}
@@ -144,6 +159,7 @@ export function TopNav({
           size="sm"
           onClick={() => setOpen((o) => !o)}
           title="Settings"
+          aria-label="Settings"
           aria-haspopup="menu"
           aria-expanded={open}
           className={`px-2 py-1 text-sm ${
@@ -152,7 +168,7 @@ export function TopNav({
               : 'text-gray-900 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700'
           }`}
         >
-          ⚙
+          <Settings size={16} />
         </Button>
         {open && (
           <div
@@ -190,7 +206,7 @@ export function TopNav({
                     variant="ghost"
                     size="sm"
                     onClick={() => void disconnect()}
-                    className="mt-1 w-full rounded-md px-2 py-1 text-xs font-semibold"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-semibold hover:bg-gray-100 dark:border-gray-600 dark:bg-[#2a2a2a] dark:hover:bg-[#333]"
                   >
                     Disconnect
                   </Button>
