@@ -118,6 +118,10 @@ export class ChatService {
   /** Sessions whose arm could not be cleared (SQLITE_BUSY). The arm must fail
    *  OPEN, so the next capture archives instead of being suppressed. */
   readonly #unclearedArms = new Set<string>();
+  /** Recently delivered prompt texts per target session, so the inbox echo of
+   *  a /send is not archived a second time. Bounded: a session keeps at most
+   *  the last 20 deliveries. */
+  readonly #pendingEcho = new Map<string, string[]>();
   /** Single-flight wake serialization (work order Task 1.3): every wakeBoss()
    *  attempt queues behind the previous one, so the read → prompt → bookmark
    *  sequence never overlaps itself (two overlapping wakes sliced the same
@@ -203,9 +207,19 @@ export class ChatService {
       // human input logs. A real message that merely BEGINS with the wake text
       // still captures (bridge.mjs:172-178).
       if (event.body === WAKE_PROMPT || event.body.startsWith(WAKE_PROMPT + '\n\n')) return;
+      // A composed prefix means the lobby delivered this prompt itself, but NOT
+      // every such prompt was archived: /send archives the raw body, /prompt
+      // (webchat) archives nothing and relies on this capture. So:
+      //  - an echo of a /send we recorded is dropped (already archived), and
+      //  - any other prefixed body is captured under its REAL sender, never
+      //    blanket-attributed to the human.
+      if (this.#consumeEcho(event.sessionId, event.body)) return;
+      const parsed = parsePromptSender(event.body);
+      const from =
+        parsed === null ? 'human' : parsed.kind === 'peer' ? parsed.name : parsed.kind === 'boss' ? BOSS : 'human';
       await this.#save({
         ts: event.ts,
-        from: 'human',
+        from,
         to: BOSS,
         body: event.body,
         sessionId: event.sessionId,
@@ -496,7 +510,10 @@ export class ChatService {
     // arriving on the target session's inbox, so a queued prompt cannot be
     // overwritten by a later send before it is answered.
     const results = await Promise.allSettled(
-      targets.map((a) => this.#ports.prompts.prompt(a.session, promptText)),
+      targets.map((a) => {
+        this.#recordEcho(a.session, promptText);
+        return this.#ports.prompts.prompt(a.session, promptText);
+      }),
     );
     const sent: string[] = [];
     const skipped: string[] = [];
@@ -692,7 +709,10 @@ export class ChatService {
     if (!delivered) return { sent: ['human'], skipped: [], messageId };
     const promptText = composePrompt(sender, text);
     const results = await Promise.allSettled(
-      entries.map((entry) => this.#ports.prompts.prompt(entry.session, promptText)),
+      entries.map((entry) => {
+        this.#recordEcho(entry.session, promptText);
+        return this.#ports.prompts.prompt(entry.session, promptText);
+      }),
     );
     const sent: string[] = [];
     const skipped: string[] = [];
@@ -714,6 +734,26 @@ export class ChatService {
 
   async #allowlist(): Promise<PeerAllowlist> {
     return this.#readAllowlist === undefined ? {} : this.#readAllowlist();
+  }
+
+  /** Remember a prompt this service just delivered, so its inbox echo is not
+   *  archived as a second message. */
+  #recordEcho(sessionId: string, text: string): void {
+    const list = this.#pendingEcho.get(sessionId) ?? [];
+    list.push(text);
+    if (list.length > 20) list.shift();
+    this.#pendingEcho.set(sessionId, list);
+  }
+
+  /** True when this body is the echo of a prompt we delivered to that session. */
+  #consumeEcho(sessionId: string, body: string): boolean {
+    const list = this.#pendingEcho.get(sessionId);
+    if (list === undefined) return false;
+    const index = list.indexOf(body);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    if (list.length === 0) this.#pendingEcho.delete(sessionId);
+    return true;
   }
 
   /** Runs a store call behind the ingest chain: the ingest retry loop

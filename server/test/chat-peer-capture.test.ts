@@ -192,3 +192,52 @@ describe('wake boundary', () => {
     expect(text).not.toContain('peer answer');
   });
 });
+
+describe('echo suppression for a /send that targets the boss', () => {
+  function rows(f: ReturnType<typeof makeChatFixture>): WireMessage[] {
+    return f.store.query({ view: 'all', after: 0, before: 0, limit: 100, agents: [] }).rows as WireMessage[];
+  }
+
+  it('archives the raw body once, not the prefixed echo', async () => {
+    const f = makeChatFixture(registry, fakeOpenCode(), ALLOWLIST);
+    await f.service.sendMessage({ to: 'boss', message: 'hello boss', from: 'human', authenticated: true });
+    // The lobby delivers "Human: hello boss" into the boss session; that inbox
+    // item is an echo, not a second message.
+    await f.service.handleEvent({
+      kind: 'inbox',
+      from: 'human',
+      to: 'boss',
+      body: 'Human: hello boss',
+      sessionId: 'ses_boss',
+      ts: '2026-11-19T10:00:01.000Z',
+    });
+    expect(rows(f).map((r) => [r.from, r.to, r.text])).toEqual([['human', 'boss', 'hello boss']]);
+  });
+
+  it('still captures genuine desktop typing (no prefix)', async () => {
+    const f = makeChatFixture(registry, fakeOpenCode(), ALLOWLIST);
+    await f.service.handleEvent({
+      kind: 'inbox',
+      from: 'human',
+      to: 'boss',
+      body: 'typed straight into the session',
+      sessionId: 'ses_boss',
+      ts: '2026-11-19T10:00:02.000Z',
+    });
+    expect(rows(f).map((r) => r.text)).toEqual(['typed straight into the session']);
+  });
+
+  it('never attributes a peer echo to the human', async () => {
+    const f = makeChatFixture(registry, fakeOpenCode(), ALLOWLIST);
+    await f.service.handleEvent({
+      kind: 'inbox',
+      from: 'human',
+      to: 'boss',
+      body: 'Peer ruben: hi boss',
+      sessionId: 'ses_boss',
+      ts: '2026-11-19T10:00:03.000Z',
+    });
+    // Captured (nothing lost), but under the peer who actually sent it.
+    expect(rows(f).map((r) => [r.from, r.to, r.text])).toEqual([['ruben', 'boss', 'Peer ruben: hi boss']]);
+  });
+});
